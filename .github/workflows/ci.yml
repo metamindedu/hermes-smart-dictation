@@ -1,0 +1,85 @@
+name: Plugin checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    name: Portable tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: npm run build && git diff --exit-code -- desktop/plugin.js
+      - name: Synthetic Python tests (no credentials or microphone)
+        run: |
+          CUTOFF=$(python -c "from datetime import datetime,timedelta,timezone; print((datetime.now(timezone.utc)-timedelta(days=3)).isoformat())")
+          uv run --isolated --python 3.12 --exclude-newer "$CUTOFF" --with 'pytest>=8,<10' --with 'fastapi>=0.115,<1' --with 'httpx>=0.27,<1' --with 'python-multipart>=0.0.20,<1' python -m pytest -q tests
+
+  native:
+    name: Compatible Hermes SDK and dependency validation
+    runs-on: ubuntu-latest
+    env:
+      HERMES_NATIVE_SOURCE: ${{ github.workspace }}/hermes-native
+      HERMES_HOME: ${{ github.workspace }}/.isolated-home
+      XDG_DATA_HOME: ${{ github.workspace }}/.isolated-data
+    defaults:
+      run:
+        shell: bash
+        working-directory: plugin
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: plugin
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: NousResearch/hermes-agent
+          ref: 2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19 # stable v0.23.0
+          path: hermes-native
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: plugin/package-lock.json
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install the pinned host's JavaScript fixtures without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: hermes-native
+      - name: Exercise real SDK controls, composer and query client
+        run: npm test
+      - name: Install the compatible host from its lock
+        run: uv sync --locked --no-default-groups --python 3.12
+        working-directory: hermes-native
+      - name: Validate source and declared dependencies in an isolated home
+        run: |
+          uv run --project ../hermes-native --no-sync python -m hermes_cli.main plugins validate "$PWD" --install-deps --json > validation.json
+          python -c "import json; r=json.load(open('validation.json')); assert r['ok'], r; assert not any('private core imports' in w.lower() for w in r.get('warnings', [])), r.get('warnings'); print('Native validation passed without private-import warnings')"

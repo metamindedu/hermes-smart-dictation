@@ -1,0 +1,20 @@
+{
+  "name": "hermes-smart-dictation",
+  "version": "0.4.0",
+  "private": true,
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/metamindedu/hermes-smart-dictation.git" },
+  "bugs": { "url": "https://github.com/metamindedu/hermes-smart-dictation/issues" },
+  "type": "module",
+  "description": "Tool-free context-selectable dictation proofreading for Hermes Desktop",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/frontend.test.mjs tests/backend-client.test.mjs tests/ui.test.mjs tests/media.test.mjs tests/native-composer.test.mjs tests/model-ui.test.mjs tests/native-launcher.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "jsdom": "^26.0.0"
+  }
+}

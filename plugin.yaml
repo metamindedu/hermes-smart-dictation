@@ -1,0 +1,10 @@
+name: smart-dictation
+version: 0.4.0
+requires_hermes: ">=0.23.0"
+description: Tool-free dictation proofreading with user-selected reference context
+provides_tools: []
+provides_hooks: []
+provides_middleware: []
+requires_env: []
+python_dependencies:
+  - "faster-whisper==1.2.1; (platform_machine != 'ARM64' or sys_platform != 'win32') and (platform_machine != 'x86_64' or platform_system != 'Darwin') and sys_platform != 'android'"

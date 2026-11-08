@@ -1,0 +1,17 @@
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+tests/.ui-fixture/
+.coverage
+coverage/
+.DS_Store
+.venv/
+.env
+.env.*
+!.env.example
+*.log
+artifacts/
+/release-candidate-*.json
+/releases/candidate-0.3.0*.json
+/releases/ui-0.2.1-manifest.json

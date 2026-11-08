@@ -1,0 +1,8 @@
+{
+  "name": "smart-dictation",
+  "label": "Smart Dictation",
+  "version": "0.4.0",
+  "tab": {"path": "/smart-dictation", "hidden": true},
+  "entry": "dist/index.js",
+  "api": "api_v0_4.py"
+}
