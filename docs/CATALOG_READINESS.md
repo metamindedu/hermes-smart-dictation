@@ -32,7 +32,7 @@ This file records the release design and required verification, not a maintainer
 
 ## Recorded local candidate checks
 
-The earlier 0.4.0 candidate passed 64 frontend/native-fixture tests and 55 synthetic Python tests. The 0.5 integration work passed 93 frontend/native-contract tests with no skips and 79 Python tests (one upstream Starlette deprecation warning). A source-owned v0.23.0 environment with isolated logical/app homes ran `plugins validate --install-deps --json`: OK with zero warnings and no private-import warning.
+The earlier 0.4.0 candidate passed 64 frontend/native-fixture tests and 55 synthetic Python tests. The 0.5 integration work passed 93 frontend/native-contract tests with no skips and 88 Python tests (one upstream Starlette deprecation warning). A source-owned v0.23.0 environment with isolated logical/app homes ran `plugins validate --install-deps --json`: OK with zero warnings and no private-import warning.
 
 The actual faster-whisper 1.2.1/CTranslate2 files-map constructor decoded a known offline synthetic speech WAV using an already-cached public base model, CPU/int8, with network blocked. The complete expected sentence was recognized. A separate actual released PluginManager/original PluginContext/facade gate test exercised real cached ASR, correction consent OFF/ON/OFF, a synthetic successful LLM transport, and a synthetic transport failure returning the warning plus all raw text. No override grants, network, paid completion, physical microphone or live-profile write were used. The substituted LLM transport is not real provider/account/billing acceptance.
 

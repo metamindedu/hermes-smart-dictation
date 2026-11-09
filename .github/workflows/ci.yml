@@ -37,7 +37,7 @@ jobs:
       - name: Synthetic Python tests (no credentials or microphone)
         run: |
           CUTOFF=$(python -c "from datetime import datetime,timedelta,timezone; print((datetime.now(timezone.utc)-timedelta(days=3)).isoformat())")
-          uv run --isolated --python 3.12 --exclude-newer "$CUTOFF" --with 'pytest>=8,<10' --with 'fastapi>=0.115,<1' --with 'httpx>=0.27,<1' --with 'python-multipart>=0.0.20,<1' python -m pytest -q tests
+          uv run --isolated --python 3.12 --exclude-newer "$CUTOFF" --with 'pytest>=8,<10' --with 'fastapi>=0.115,<1' --with 'httpx>=0.27,<1' --with 'python-multipart>=0.0.20,<1' --with 'av==18.1.0' --with 'numpy==2.5.4' python -m pytest -q tests
 
   native:
     name: Compatible Hermes SDK and dependency validation

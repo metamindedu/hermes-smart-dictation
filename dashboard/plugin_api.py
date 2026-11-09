@@ -109,8 +109,12 @@ _MODELS = _local._MODELS
 def _load_model(home, cfg):
     return _local.load_model(home, cfg)
 
+# Recording stops nominally at 180 s; retain a bounded 5 s scheduling/encoding
+# grace without trimming speech. Beyond this hard ceiling the file is refused.
+CONTEXTUAL_MAX_SECONDS = 185
+
 def _decode_local(home, cfg, path):
-    return _local.decode_local(path, owner_home=home, settings=cfg, max_seconds=180)
+    return _local.decode_local(path, owner_home=home, settings=cfg, max_seconds=CONTEXTUAL_MAX_SECONDS)
 
 
 @router.get('/status')

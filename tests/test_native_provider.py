@@ -57,3 +57,29 @@ def test_invalid_policy_and_unsafe_task_and_busy(fixture):
     try: assert p.transcribe('file')['error']=='busy'
     finally: local.SLOT.release()
     p.close(); assert p.transcribe('file')['error']=='invalid_owner'
+
+@pytest.mark.parametrize('extra', [
+    {'plugins':[{'id':'web','max_results':1}]},
+    {'web_search_options':{'search_context_size':'low'}},
+    {'nested':{'plugins':[{'id':'web'}]}},
+    {'Web_Search_Options':{}},
+])
+def test_hosted_tool_overrides_never_reach_facade_and_preserve_entire_raw(fixture, extra):
+    import copy
+    p,s,_,c=fixture
+    s['policy']={'correction_enabled':True,'consent_version':'native-v1'}
+    s['raw']='원문 42 not /tmp — preserve every character'
+    s['root']['auxiliary']={'smart_dictation_correction':{'extra_body':extra}}
+    before=copy.deepcopy(s['root'])
+    result=p.transcribe('file')
+    assert result['success'] and result['transcript']==c.WARNING+s['raw']
+    assert s['calls']==[]
+    assert s['root']==before, 'unsafe saved settings must be preserved, not scrubbed'
+
+
+def test_reasoning_only_override_still_allows_one_bounded_correction(fixture):
+    p,s,_,_=fixture
+    s['policy']={'correction_enabled':True,'consent_version':'native-v1'}
+    s['root']['auxiliary']={'smart_dictation_correction':{'extra_body':{'reasoning':{'effort':'low'}}}}
+    assert p.transcribe('file')['transcript']=='corrected'
+    assert len(s['calls'])==1

@@ -3,7 +3,7 @@ import json
 
 WARNING = '[Smart Dictation: correction unavailable; original transcript follows]\n'
 TASK = 'smart_dictation_correction'
-FORBIDDEN = {'tools','tool_choice','functions','function_call','messages','input','system','instructions','max_tokens','max_completion_tokens','max_output_tokens','temperature','stream'}
+FORBIDDEN = {'tools','tool_choice','functions','function_call','plugins','web_search_options','messages','input','system','instructions','max_tokens','max_completion_tokens','max_output_tokens','temperature','stream'}
 
 def policy(value):
     if not isinstance(value, dict):

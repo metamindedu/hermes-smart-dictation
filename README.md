@@ -90,7 +90,7 @@ Only the owner's explicitly configured local provider is used; a saved STT OFF i
 
 Decoding happens in an owner-bound worker; its lazy segment generator is consumed there. Cached models are partitioned by owner/effective settings. One decode per owner, bounded result retention and scheduled two-minute expiry limit background state. Cancellation discards a result but cannot necessarily interrupt a decoder already running.
 
-The Contextual recorder stops at three minutes. File/retained-data bounds are not an OS sandbox, adversarial-codec peak-memory bound or hard C++ deadline. Native forwarding can buffer before plugin validation, so no pre-buffer Gateway ingress guarantee is claimed. There is no plugin-provided automatic sentence endpointing or continuous hands-free mode.
+The Contextual recorder stops nominally at three minutes; the server admits up to 185 seconds of retained PCM, including a bounded five-second scheduling/encoding grace. In-grace speech is not truncated; genuinely longer input is refused. File/retained-data bounds are not an OS sandbox, adversarial-codec peak-memory bound or hard C++ deadline. Native forwarding can buffer before plugin validation, so no pre-buffer Gateway ingress guarantee is claimed. There is no plugin-provided automatic sentence endpointing or continuous hands-free mode.
 
 Local means the **selected Hermes backend host**. Core transports such as messaging/remote Desktop can first deliver audio there; this provider does not call cloud STT. Contextual recording supports local connections only. Native processes the core-supplied file without another upload/job server; Contextual keeps its bounded async jobs and raw-only ASR, without double correction.
 
