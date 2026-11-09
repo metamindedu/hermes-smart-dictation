@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { jsx, jsxs } from 'react/jsx-runtime'
 import { host, atom, queryClient, useValue, usePluginI18n, Button, Checkbox, Input, Textarea, Codicon, Popover, PopoverTrigger, PopoverContent, COMPOSER_AREAS, PALETTE_AREA } from '@hermes/plugin-sdk'
-import { ID, VERSION, DEFAULTS, settings, ownerKey, validLocalTarget, DictationController, safeError } from './core.mjs'
+import { ID, VERSION, ownerKey, sameTarget, validLocalTarget, DictationController, safeError } from './core.mjs'
 import { RecorderCoordinator } from './media.mjs'
 import { locales } from './locales.mjs'
 import { ModelSettings } from './model-settings.jsx'
 import { OwnerBackend } from './backend.mjs'
+import { SetupGuide } from './setup-guide.jsx'
+import { NativeStatus } from './native-ui.jsx'
+import { workflowPreferences, saveWorkflowPreferences, contextualView } from './workflow.mjs'
 
 // A shared boolean opens every mounted composer and their focus layers clash.
 const open = atom(null)
@@ -21,7 +24,8 @@ function capture() {
   const owner = host.state.focusedSessionOwner?.get()
   return { owner: owner ? { ...owner } : null, runtimeId: host.state.focusedSessionId?.get() || null, storedId: host.state.focusedStoredSessionId?.get() || null, activeConnectionId: host.state.connectionId.get(), activeProfile: host.state.profile.get(), busy: host.state.busy.get() }
 }
-function configFor(owner) { return settings(app.ctx.storage.get('settings:' + ownerKey(owner), DEFAULTS)) }
+function rawConfigFor(owner) { return ownerKey(owner) ? app.ctx.storage.get('settings:' + ownerKey(owner), undefined) : undefined }
+function configFor(owner) { return workflowPreferences(rawConfigFor(owner)) }
 function startRecording() { return app.recorder.start(configFor(capture().owner)) }
 function openExistingPanel(runtime) {
   if (app !== runtime) return
@@ -41,19 +45,24 @@ function CheckRow({ id, title, description, checked, onChange, disabled }) {
     jsxs('span', { style: { minWidth: 0, flex: 1 }, children: [jsx('span', { style: { display: 'block', fontSize: 13, fontWeight: 500 }, children: title }), jsx('span', { style: { ...proseStyle, display: 'block' }, children: description })] })
   ] })
 }
-export function SettingsForm() {
+export function SettingsForm({ showSetup = true } = {}) {
   const t = usePluginI18n(ID)
+  const operation = useController()
   const owner = useValue(host.state.focusedSessionOwner)
   useValue(host.state.connectionId); useValue(host.state.profile)
   const key = ownerKey(owner)
   const [draft, setDraft] = useState(() => configFor(owner))
+  const [loadedKey, setLoadedKey] = useState(key)
   const [saved, setSaved] = useState(false)
-  useEffect(() => { setDraft(configFor(owner)); setSaved(false) }, [key])
-  const allowed = validLocalTarget(capture())
+  useEffect(() => { setDraft(configFor(owner)); setLoadedKey(key); setSaved(false) }, [key])
+  const allowed = loadedKey === key && validLocalTarget(capture())
+  const operationBusy = active(operation) || operation.pending
   const update = (name, value) => { setDraft(s => ({ ...s, [name]: value })); setSaved(false) }
   const save = () => {
-    if (!allowed || !validLocalTarget(capture()) || key !== ownerKey(capture().owner)) return
-    app.ctx.storage.set('settings:' + key, settings(draft)); preferencesVersion.set(preferencesVersion.get() + 1); setSaved(true)
+    if (!allowed || loadedKey !== key || !validLocalTarget(capture()) || key !== ownerKey(capture().owner)) return
+    const live = app.controller.state
+    if (draft.workflow !== configFor(capture().owner).workflow && (active(live) || live.pending)) return
+    app.ctx.storage.set('settings:' + key, saveWorkflowPreferences(rawConfigFor(capture().owner), draft)); preferencesVersion.set(preferencesVersion.get() + 1); setSaved(true)
   }
   const checks = [
     ['includeInstructions', t('contextInstructions'), t('contextInstructionsHelp')],
@@ -62,10 +71,22 @@ export function SettingsForm() {
     ['includeHistory', t('contextHistory'), t('contextHistoryHelp')]
   ]
   return jsxs('div', { className: 'smart-dictation-settings', style: sectionStyle, children: [
+    showSetup && jsx(SetupGuide, { ctx: app.ctx, settingsPage: true, native: draft.workflow === 'native' }),
     jsx('p', { style: proseStyle, children: t('scope', owner?.profile || t('unknownOwner')) }),
     !allowed && jsx(Notice, { children: t('localOnly') }),
-    jsx(CheckRow, { id:'sd-start-on-click', title:t('startOnClick'), description:t('startOnClickHelp'), checked:draft.startOnClick, disabled:!allowed, onChange:v=>update('startOnClick',v) }),
+    jsxs('fieldset', { style: { border: `1px solid ${line}`, borderRadius: 7, padding: 10, margin: 0, minWidth: 0 }, children: [
+      jsx('legend', { style: { fontSize: 13 }, children: t('workflowHeading') }),
+      jsx('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' }, children: ['native', 'contextual'].map(mode => jsx(Button, { type: 'button', size: 'sm', variant: draft.workflow === mode ? 'default' : 'outline', 'aria-pressed': draft.workflow === mode, disabled: !allowed || operationBusy, style: { whiteSpace: 'normal', height: 'auto', minHeight: 30 }, onClick: () => update('workflow', mode), children: t('workflow_' + mode) }, mode)) }),
+      jsx('p', { style: { ...proseStyle, marginTop: 8 }, children: t('workflowHelp') }),
+      draft.workflow === 'native' && jsx('p', { style: { ...proseStyle, marginTop: 8 }, children: t('nativeLimits') }),
+      jsx('p', { style: { ...proseStyle, marginTop: 8 }, children: t('workflowSaveHelp') })
+    ] }),
     jsx(ModelSettings, { capture }),
+    showSetup && draft.workflow === 'native' && jsx(NativeStatus, { capture, backend: app.backend }),
+    jsxs('details', { open: draft.workflow === 'contextual', children: [
+    jsx('summary', { style: { fontSize: 13, cursor: 'pointer' }, children: t('contextPreferences') }),
+    jsx('p', { style: { ...proseStyle, marginBlock: 8 }, children: t('contextPreferencesHelp') }),
+    jsx(CheckRow, { id:'sd-start-on-click', title:t('startOnClick'), description:t('startOnClickHelp'), checked:draft.startOnClick, disabled:!allowed, onChange:v=>update('startOnClick',v) }),
     ...checks.map(([name, title, description]) => jsx(CheckRow, { id: `sd-${name}`, title, description, checked: draft[name], disabled: !allowed, onChange: v => update(name, v) }, name)),
     draft.includeInstructions && jsx(Textarea, { 'aria-label': t('contextInstructions'), value: draft.instructions, maxLength: 2000, disabled: !allowed, rows: 4, onChange: e => update('instructions', e.target.value), style: { width: '100%', minWidth: 0, resize: 'vertical', fontSize: 12, lineHeight: 1.6 } }),
     draft.includeHistory && jsxs('div', { style: { display: 'grid', gap: 6 }, children: [
@@ -75,15 +96,19 @@ export function SettingsForm() {
     ] }),
     jsx(CheckRow, { id: 'sd-auto', title: t('autoInsert'), description: t('autoInsertHelp'), checked: draft.autoInsert, disabled: !allowed, onChange: v => update('autoInsert', v) }),
     jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }, children: [jsx('label', { htmlFor: 'sd-timeout', style: { fontSize: 12 }, children: t('timeout') }), jsx(Input, { id: 'sd-timeout', type: 'number', min: 5, max: 60, value: draft.timeoutSeconds, disabled: !allowed, onChange: e => update('timeoutSeconds', e.target.value), style: { width: 85 } })] }),
+    ] }),
     jsx(Notice, { children: t('modelDisclosure') }),
     jsxs('details', { children: [jsx('summary', { style: { fontSize: 12, cursor: 'pointer', color: muted }, children: t('requestDetails') }), jsx('p', { style: { ...proseStyle, marginTop: 8 }, children: t('requestHelp') })] }),
-    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 10 }, children: [jsx(Button, { type: 'button', size: 'sm', disabled: !allowed, onClick: save, children: t('save') }), saved && jsx('span', { role: 'status', style: { fontSize: 12, color: muted }, children: t('saved') })] })
+    jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }, children: [jsx(Button, { type: 'button', size: 'sm', disabled: !allowed || (draft.workflow !== configFor(owner).workflow && operationBusy), onClick: save, children: t('save') }), saved && jsx('span', { role: 'status', style: { fontSize: 12, color: muted }, children: t('saved') })] })
   ] })
 }
-export function Panel() {
+export function ContextualPanel() {
   const t = usePluginI18n(ID)
-  const s = useController()
+  const state = useController()
   const owner = useValue(host.state.focusedSessionOwner)
+  useValue(host.state.focusedSessionId); useValue(host.state.focusedStoredSessionId)
+  useValue(host.state.connectionId); useValue(host.state.profile)
+  const s = contextualView(state, app.controller.target, capture())
   const [showSettings, setShowSettings] = useState(false)
   const busy = active(s) || s.pending
   const targetSupported = validLocalTarget(capture())
@@ -93,6 +118,7 @@ export function Panel() {
       jsxs('div', { children: [jsx('h3', { style: { margin: 0, fontSize: 14, fontWeight: 600 }, children: t('title') }), jsx('p', { style: proseStyle, children: `${owner?.profile || t('unknownOwner')} · ${t('subtitle')}` })] }),
       jsx(Button, { type: 'button', variant: 'ghost', size: 'sm', 'aria-label': t('settings'), onClick: () => setShowSettings(v => !v), children: jsx(Codicon, { name: 'settings-gear', size: '1rem' }) })
     ] }),
+    jsx(SetupGuide, { ctx: app.ctx, forceOpen: s.message === 'backend_unavailable' }),
     jsx('div', { role: 'status', 'aria-live': 'polite', style: { fontSize: 13, fontWeight: 500 }, children: t('phase_' + s.phase) }),
     jsxs('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' }, children: [
       jsx(Button, { type: 'button', size: 'sm', disabled: s.phase !== 'recording' && (busy || !targetSupported), onClick: () => s.phase === 'recording' ? app.recorder.stop(false) : run(startRecording), children: s.phase === 'recording' ? t('stop') : t('start') }),
@@ -111,8 +137,32 @@ export function Panel() {
       s.applied && jsx(Button, { type: 'button', variant: 'outline', size: 'sm', disabled: busy, onClick: () => run(() => app.controller.restore()), children: t('restore') })
     ] }),
     jsx('p', { style: proseStyle, children: t('footer') }),
-    showSettings && jsxs('div', { style: { borderTop: `1px solid ${line}`, paddingTop: 14 }, children: [jsx('h4', { style: { margin: '0 0 12px', fontSize: 13, fontWeight: 600 }, children: t('contextTitle') }), jsx(SettingsForm, {})] })
+    showSettings && jsxs('div', { style: { borderTop: `1px solid ${line}`, paddingTop: 14 }, children: [jsx('h4', { style: { margin: '0 0 12px', fontSize: 13, fontWeight: 600 }, children: t('contextTitle') }), jsx(SettingsForm, { showSetup: false })] })
   ] })
+}
+export function NativePanel() {
+  const t = usePluginI18n(ID)
+  const owner = useValue(host.state.focusedSessionOwner)
+  const [showSettings, setShowSettings] = useState(false)
+  return jsxs('div', { 'data-smart-dictation-panel': '', 'data-smart-dictation-native': '', style: sectionStyle, children: [
+    jsxs('div', { style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }, children: [
+      jsxs('div', { children: [jsx('h3', { style: { margin: 0, fontSize: 14, fontWeight: 600 }, children: t('title') }), jsx('p', { style: proseStyle, children: `${owner?.profile || t('unknownOwner')} · ${t('workflow_native')}` })] }),
+      jsx(Button, { type: 'button', variant: 'ghost', size: 'sm', 'aria-label': t('settings'), onClick: () => setShowSettings(v => !v), children: jsx(Codicon, { name: 'settings-gear', size: '1rem' }) })
+    ] }),
+    jsx(Notice, { children: t('nativeMicHelp') }),
+    jsx('p', { style: proseStyle, children: t('nativeLimits') }),
+    jsx('p', { style: proseStyle, children: t('nativeFallback') }),
+    jsx(SetupGuide, { ctx: app.ctx, native: true }),
+    jsx(NativeStatus, { capture, backend: app.backend }),
+    showSettings && jsx(SettingsForm, { showSetup: false })
+  ] })
+}
+export function Panel() {
+  const owner = useValue(host.state.focusedSessionOwner)
+  useValue(preferencesVersion)
+  const state = useController()
+  const ownActive = active(state) && sameTarget(app.controller.target, capture())
+  return configFor(owner).workflow === 'native' && !ownActive ? jsx(NativePanel, {}) : jsx(ContextualPanel, {})
 }
 export function Launcher() {
   const t = usePluginI18n(ID)
@@ -123,7 +173,9 @@ export function Launcher() {
   const owner = useValue(host.state.focusedSessionOwner)
   useValue(preferencesVersion)
   const state = useController()
-  const quick = configFor(owner).startOnClick
+  const cfg = configFor(owner)
+  const contextual = cfg.workflow === 'contextual' || (active(state) && sameTarget(app.controller.target, capture()))
+  const quick = contextual && cfg.startOnClick
   useEffect(() => {
     runtime.launchers.set(id, ref)
     return () => { runtime.launchers.delete(id); if (open.get() === id) open.set(null) }
@@ -133,7 +185,8 @@ export function Launcher() {
     if (app !== runtime) { event.preventDefault(); return }
     runtime.lastLauncher = id
     // Only a main-button gesture starts media; never mount/onOpenChange/palette.
-    if (!configFor(capture().owner).startOnClick) return
+    const liveConfig = configFor(capture().owner)
+    if (liveConfig.workflow !== 'contextual' || !liveConfig.startOnClick) return
     event.preventDefault()
     showPanel()
     const live = runtime.controller.state
@@ -142,7 +195,7 @@ export function Launcher() {
   }
   return jsxs(Popover, { open:isOpen, onOpenChange:v=>{if(v)showPanel();else if(open.get()===id)open.set(null)}, children: [
     jsxs('span', {style:{display:'inline-flex',alignItems:'center',gap:1},children:[
-      jsx(PopoverTrigger, {asChild:true,children:jsxs(Button,{ref,type:'button',variant:'ghost',size:'sm',title:quick?t(state.phase==='recording'?'stop':'start'):t('title'),'aria-label':t('title'),'data-smart-dictation-launcher':'','aria-busy':active(state)||state.pending||undefined,onClick:activate,style:{gap:5},children:[jsx(Codicon,{name:state.phase==='recording'?'debug-stop':'mic',size:'1rem'}),jsx('span',{style:{fontSize:11},children:t(quick?(state.phase==='recording'?'stopShort':'recordShort'):'shortLabel')})]})}),
+      jsx(PopoverTrigger, {asChild:true,children:jsxs(Button,{ref,type:'button',variant:'ghost',size:'sm',title:!contextual?t('nativeOptions'):quick?t(state.phase==='recording'?'stop':'start'):t('title'),'aria-label':t('title'),'data-smart-dictation-launcher':'','aria-busy':active(state)||state.pending||undefined,onClick:activate,style:{gap:5},children:[jsx(Codicon,{name:state.phase==='recording'?'debug-stop':'mic',size:'1rem'}),jsx('span',{style:{fontSize:11},children:t(!contextual?'nativeShort':quick?(state.phase==='recording'?'stopShort':'recordShort'):'shortLabel')})]})}),
       quick&&jsx(Button,{type:'button',variant:'ghost',size:'sm','aria-label':t('openPanel'),title:t('openPanel'),onClick:showPanel,style:{paddingInline:4},children:jsx(Codicon,{name:'chevron-down',size:'1rem'})})
     ]}),
     jsx(PopoverContent, { side: 'top', align: 'start', collisionPadding: 12, onCloseAutoFocus:event=>{const next=open.get();if(next!==null&&next!==id)event.preventDefault()}, 'aria-label': t('title'), style: { width: 'min(440px, calc(100vw - 28px))', maxHeight: 'min(740px, calc(100vh - 100px))', overflowY: 'auto', overflowX: 'hidden', padding: 16 }, children: jsx(Panel, {}) })
@@ -152,8 +205,9 @@ export default {
   id: ID, name: 'Smart Dictation', description: 'Tool-free dictation proofreading with selected reference context.', defaultEnabled: true,
   register(ctx) {
     ctx.i18n.register(locales)
-    const runtime = { ctx, recorder: null, controller: null, launchers:new Map(), lastLauncher:null }; app = runtime
+    const runtime = { ctx, recorder: null, controller: null, backend: null, launchers:new Map(), lastLauncher:null }; app = runtime
     const backend = new OwnerBackend(ctx, capture, queryClient)
+    runtime.backend = backend
     const controller = new DictationController({
       capture, routes: () => host.profileRoutes(),
       status: target => backend.request(target, '/status', { timeoutMs: 12000 }),

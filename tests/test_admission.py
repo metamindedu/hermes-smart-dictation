@@ -36,6 +36,9 @@ def settings():
 
 def test_model_loader_never_enables_downloads(monkeypatch, tmp_path):
     calls = []
+    for name in ('model.bin', 'config.json', 'tokenizer.json', 'vocabulary.json'):
+        (tmp_path / name).write_bytes(b'fixture')
+    monkeypatch.setattr(api._local, 'resolve', lambda cfg: tmp_path)
     def model(name, **kwargs):
         calls.append(kwargs)
         raise OSError('cache miss')
@@ -50,10 +53,11 @@ def test_model_loader_never_enables_downloads(monkeypatch, tmp_path):
 
 def test_decoder_uses_snapshot_language_and_no_dispatcher(monkeypatch, tmp_path):
     seen = []
+    monkeypatch.setattr(api._local, 'pcm', lambda *a: SimpleNamespace(size=1))
     def transcribe(path, **kwargs):
         seen.append(kwargs)
         return [SimpleNamespace(text='synthetic sentence', no_speech_prob=0.0, avg_logprob=0.0)], None
-    monkeypatch.setattr(api, '_load_model', lambda *a, **k: SimpleNamespace(transcribe=transcribe))
+    monkeypatch.setattr(api._local, 'load_model', lambda *a, **k: SimpleNamespace(transcribe=transcribe))
     assert api._decode_local(tmp_path, settings(), 'fixture.wav') == 'synthetic sentence'
     assert seen[0]['language'] == 'ko'
     assert seen[0]['task'] == 'transcribe' and seen[0]['condition_on_previous_text'] is False

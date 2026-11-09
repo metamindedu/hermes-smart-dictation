@@ -1,7 +1,7 @@
 import { ownerKey, targetKey, validLocalTarget, responseOwned } from './core.mjs'
 
 const JOB_ID = /^[A-Za-z0-9_-]{16,128}$/
-const PATH = /^\/(?:status|soul|transcribe(?:\/jobs\/[A-Za-z0-9_-]{16,128})?)$/
+const PATH = /^\/(?:status|native-status|soul|transcribe(?:\/jobs\/[A-Za-z0-9_-]{16,128})?)$/
 const allowedError = value => ['no_speech', 'recording_too_large', 'busy', 'transcription_timeout'].includes(value) ? value : 'backend_unavailable'
 
 // ctx.rest captures its ambient native route synchronously. Do not put an

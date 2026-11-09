@@ -1,13 +1,17 @@
 # Smart Dictation
 
-A community Hermes Desktop plugin for **local dictation → bounded proofreading → the original draft**. Messages are never automatically sent. Choose which reference context accompanies the transcript; keep the original and restore the previous draft when it is still unchanged.
+A community Hermes plugin for **local speech recognition and bounded, tool-free proofreading**. New installations use Hermes' existing microphone through the `smart_dictation` speech provider. The existing **Contextual dictation** workflow remains available for selected conversation context, review, original-text recovery and protected insertion.
+
+The plugin does not submit chat messages. Ordinary native dictation inserts text; separately selected Hermes voice-conversation modes keep their own submission behavior. Native follows stock Hermes insertion/undo, not Contextual's stricter session/unchanged-draft guarantees.
 
 ![Smart Dictation recording panel](docs/images/smart-dictation.png)
+
+*Contextual recording/review interface. Native uses Hermes' built-in microphone; the plugin's Voice options button opens guidance, not another recorder.*
 
 ## Requirements and installation
 
 - Hermes **0.23.0 or newer**, with the Desktop app. The compatible-host fixtures pin released revision `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`; unreleased plugin-RPC APIs are not required.
-- Hermes local STT explicitly configured with `stt.provider: local`, and an already-cached faster-whisper model. The normal plugin dependency admission installs the declared faster-whisper **library**, not model weights. Configure/cache the desired model through your normal local-STT setup first. The plugin never downloads a model, runs a dependency installer at runtime or substitutes cloud STT.
+- Select `stt.provider: smart_dictation` for Native after reviewing the provider change. Contextual accepts `local` or `smart_dictation` and performs raw ASR directly, without double correction. An already-cached faster-whisper model is required. Normal dependency admission installs libraries, **not model weights**. Missing/partial model or tokenizer files are errors, never an automatic download, runtime installer or cloud-STT fallback.
 - A configured correction provider/account in Hermes. Choose a lightweight model for this auxiliary task; no vendor/model/language-specific default is shipped.
 - Local faster-whisper support follows its native wheels: Windows x64, supported Linux architectures and Apple Silicon macOS. Windows ARM64, Intel macOS and Android are excluded by the dependency marker; no support is claimed for their local decoder.
 
@@ -19,11 +23,47 @@ hermes plugins install https://github.com/metamindedu/hermes-smart-dictation --r
 
 For a named local profile, use `hermes --profile <name> plugins install ... --ref <sha> --enable`. Follow Hermes' normal dependency/activation prompts. Python registration/backend activation is **per profile**; the Desktop JavaScript asset is **app-wide**. Other and future profiles are not automatically enrolled. A submitted catalog PR is not a listing until maintainers merge it.
 
-## Use
+## First use: prepare the profiles you choose
+
+Open **Voice options** or plugin settings. The guide works without an enabled Python backend or focused conversation. Select local profiles, optionally include Native correction preparation, then **copy the request and send it yourself** to your Hermes agent with access to the intended computer. Selection edits the request only: it does not activate profiles, insert a draft, invoke an agent or send a message. If discovery fails, the generic request asks the agent to list and confirm targets first.
+
+The agent should use normal installation/activation and configuration admission, preserve explicit OFF/other providers/models/accounts, and report prerequisites separately per target. Later profiles are not automatically enrolled. A visible panel or saved UI preference is not proof of backend readiness.
+
+### Native microphone (fresh-install default)
+
+After reviewing the old-to-new provider transition, the current default profile can select the provider through normal configuration:
+
+```sh
+hermes config set stt.provider smart_dictation
+```
+
+The tested 0.23.0 STT picker can omit plugin rows even when dispatch works. Use the supported configuration procedure/copied request, not an invented dropdown. Preserve local model/device/language settings and an explicit STT OFF unless separately approved. **Provider selection applies to other voice processing in that profile, including gateway voice input; it is not current-Desktop-conversation-only.**
+
+Native correction starts **OFF**. Installation, provider selection and UI mode are not transcript-transmission or paid-call consent. After explicit profile-wide consent, its own configuration shape is:
+
+```yaml
+plugins:
+  entries:
+    smart-dictation:
+      settings:
+        native:
+          correction_enabled: true
+          consent_version: native-v1
+```
+
+Apply through normal configuration procedures; do not overwrite existing config with this partial example. Model download, paid tests and microphone capture need separate approval. The copied preparation request makes these boundaries explicit.
+
+Use the built-in Hermes microphone. Keep the intended conversation selected until transcription finishes. Native has no selected session context, original/corrected comparison or plugin restore after success; use Contextual when those guarantees matter. If enabled correction fails or is skipped after ASR, **a fixed warning line and the complete original transcript are inserted as text**. Review/remove the warning before sending. Deliberately disabled correction returns plain recognition; silence stays empty.
+
+**Check setup for this profile** reads provider selection, library/cache metadata and correction consent only. It does not load a decoder, record audio, run inference or prove actual model/provider access.
+
+### Contextual dictation
+
+Existing saved context/recording preferences stay in Contextual until explicitly changed. Fresh/absent preferences use Native. Empty/malformed parsed preferences use manual Contextual guidance without repair writes. Unparseable serialized storage is returned as a fallback by the public SDK and cannot be distinguished from absence; reading it never writes or starts recording. Saving a workflow changes the toolbar UI only, not provider selection/correction consent. Inactive values and unrelated own settings are retained; mode changes are blocked during active/pending plugin operations.
 
 Use **Record** beside the composer for one-click dictation, or its arrow to open the panel without recording. Click **Stop and proofread** to transcribe, correct and append to the original draft. **Proofread current draft** operates on text already in the input. A result applies only while its connection, profile, conversation, operation generation and original draft remain unchanged.
 
-**Start recording from the toolbar** is ON for fresh/absent preferences. An explicit saved OFF is preserved; malformed values fail closed to OFF. Only the main recording-button gesture can start capture, after owner/context checks and microphone permission. Mounting, installing, opening settings, saving preferences, palette commands and the panel-only arrow never acquire the microphone. Each mounted composer has its own popup owner.
+In Contextual, **Start recording from the toolbar** retains its independently configured default. Explicit OFF is preserved; malformed values fail closed. It never starts the plugin recorder in Native mode. Only an explicit Contextual recording-button gesture can start capture after owner/context checks and microphone permission. Mount, install, settings, saving, mode switching, palette and the panel-only arrow never acquire the microphone. Each mounted composer has its own popup owner.
 
 ### Choose the correction model in Hermes
 
@@ -35,7 +75,7 @@ Hermes owns model/provider/account selection, supported effort choices, validati
 
 Custom instructions start **empty and disabled**. SOUL, title and history are initially OFF. No language, product name, organization or personal style is baked into correction preferences. UI has English fallback and Korean localization; saved preferences are preserved.
 
-Each source is independently selectable. OFF prevents its fetch and transmission:
+These are **Contextual-only** sources, not imported into Native. Each is independently selectable; OFF prevents its fetch and transmission:
 
 - Additional correction instructions: up to 2,000 characters.
 - The captured owner's saved SOUL.md: first 4,000 characters, as untrusted reference.
@@ -50,19 +90,21 @@ Only the owner's explicitly configured local provider is used; a saved STT OFF i
 
 Decoding happens in an owner-bound worker; its lazy segment generator is consumed there. Cached models are partitioned by owner/effective settings. One decode per owner, bounded result retention and scheduled two-minute expiry limit background state. Cancellation discards a result but cannot necessarily interrupt a decoder already running.
 
-The recorder stops at three minutes. Client/plugin uploads are limited to 12 MiB; decoded duration is not independently measured on the server. Native forwarding buffers a request before plugin validation, so this is not a pre-buffer Gateway ingress guarantee. There is no automatic sentence endpointing or continuous hands-free mode.
+The Contextual recorder stops at three minutes. File/retained-data bounds are not an OS sandbox, adversarial-codec peak-memory bound or hard C++ deadline. Native forwarding can buffer before plugin validation, so no pre-buffer Gateway ingress guarantee is claimed. There is no plugin-provided automatic sentence endpointing or continuous hands-free mode.
+
+Local means the **selected Hermes backend host**. Core transports such as messaging/remote Desktop can first deliver audio there; this provider does not call cloud STT. Contextual recording supports local connections only. Native processes the core-supplied file without another upload/job server; Contextual keeps its bounded async jobs and raw-only ASR, without double correction.
 
 ## Correction, cost and privacy
 
-Correction uses the SDK's owner/session-routed **`llm.oneshot`** with bounded supplied instructions/input. The plugin supplies no tool schemas, constructs no agent and dispatches no tools or skills. An explicit auxiliary model can override the conversation's model while the session still supplies the selected context and ownership.
+Native uses the original registration context's public **`ctx.llm.complete`** on its owned correction task, with bounded transcript-only input and no new route-override/trust grants. Contextual uses owner/session-routed **`llm.oneshot`** with the selected bounded references. The plugin supplies no tool schemas, constructs no agent and dispatches no tools/skills. An explicit auxiliary model can override the conversation model in Contextual.
 
 With a remote model, the transcript and selected context leave the device for that provider. Hermes may apply native recovery, credential rotation or fallback; one plugin invocation is not necessarily one network attempt, a frozen payer or a hard cost ceiling. The plugin does not automatically repeat uploads or correction calls. Polling retrieves the existing transcription job only.
 
-Native 0.23's text-only one-shot envelope does not expose final-provider, tool-call/finish-reason provenance and may fall back to reasoning text when visible content is empty. The plugin cannot independently certify those missing metadata. Review every correction; failures/timeouts preserve the original instead of silently labeling it corrected. A client timeout invalidates late insertion, not necessarily server execution or billing.
+The 0.23 Contextual one-shot envelope does not expose final-provider/tool-call/finish-reason provenance and can fall back to reasoning text when visible content is empty. The Native facade likewise omits mixed-tool/finish-reason details. No tool dispatcher is supplied, but arbitrary host/provider extensions are not certified sandboxes. Review corrections; Native failures preserve labelled raw, while Contextual failures retain reviewable raw without silently applying it. Client timeout is not proof of server cancellation or zero billing.
 
 Preferences alone are saved in plugin storage. Transcript, correction and restore snapshots stay in volatile app memory; job-query data is removed after use. Temporary audio uses the owner's scratch directory and is removed in cleanup on normal/error paths. A crash or OS cleanup failure can leave a temporary file. Server job text is scheduled to expire two minutes after completion. Hermes/provider logging and retention policies are separate.
 
-**Use original text** and **Restore the previous draft** are owner/draft-fenced, not global undo. A late permission callback can release only its own media stream, never a newer attempt's stream. Remote connections, automatic future-profile activation and hidden account/provider substitution are unsupported.
+In Contextual, **Use original text** and **Restore the previous draft** are owner/draft-fenced, not global undo. Foreign captured results are not displayed as the current conversation's results. A late permission callback releases only its own attempt, never a newer stream. Automatic future-profile enrollment, remote installation and hidden account/provider substitution are unsupported. Core owns Native temporary-file cleanup and ordinary draft persistence; crash/OS cleanup and host/provider logging remain separate boundaries.
 
 ## Upgrades and development
 
@@ -77,6 +119,6 @@ npm run build
 uv run --isolated --with pytest --with fastapi --with httpx --with python-multipart python -m pytest -q --basetemp=<owned-scratch-directory> tests
 ```
 
-Set `HERMES_NATIVE_SOURCE=/path/to/the-compatible-hermes-checkout` for real composer, Popover/Button, query-client and native-settings contract fixtures; otherwise native-only tests are explicitly skipped. Primitive fixtures are not installed-renderer/device certification. CI separates portable OS tests and compatible-host validation with dependency admission, without credentials, paid inference or real microphones.
+Set `HERMES_NATIVE_SOURCE=/path/to/the-compatible-hermes-checkout` for native composer, controls, query-client and settings contracts; otherwise those cases explicitly skip. Native-control screenshots use synthetic data and declared host/theme/clipboard substitutions, not installed-app, physical-microphone, latency or real-provider certification. CI uses no credentials, paid inference or physical microphones. See [the Native acceptance criteria](docs/NATIVE_FIRST_ACCEPTANCE.md).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [catalog evidence](docs/CATALOG_READINESS.md). Licensed under [MIT](LICENSE). This is a community project, not a Nous-maintained or automatically approved catalog entry.

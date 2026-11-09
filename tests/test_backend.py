@@ -1,4 +1,5 @@
 import importlib.util
+import sys
 from pathlib import Path
 import threading
 import time
@@ -17,6 +18,7 @@ spec.loader.exec_module(api)
 @pytest.fixture
 def fixture(monkeypatch, tmp_path):
     seen = []
+    monkeypatch.setitem(sys.modules, 'hermes_cli.config', SimpleNamespace(load_config_readonly=lambda: {'stt': {'provider': 'local'}}))
     def transcribe(path, cfg):
         p = Path(path)
         seen.append((p, p.read_bytes(), cfg))
@@ -47,13 +49,29 @@ def poll(client, response):
 
 def test_success_status_and_cleanup(fixture):
     client, _, seen, home = fixture
-    assert client.get('/status').json() == {'ok': True, 'version': api.VERSION, 'transcription_busy': False, 'capabilities': ['async-transcription-v1'], 'profile': 'default', 'stt': {'provider': 'local', 'model': 'base', 'language': 'ko', 'available': True, 'cache_verified': False}, 'max_audio_bytes': api.MAX_AUDIO_BYTES}
+    assert client.get('/status').json() == {'ok': True, 'version': api.VERSION, 'transcription_busy': False, 'capabilities': ['async-transcription-v1'], 'profile': 'default', 'configured_stt_provider': 'local', 'stt': {'provider': 'local', 'model': 'base', 'language': 'ko', 'available': True, 'cache_verified': False}, 'max_audio_bytes': api.MAX_AUDIO_BYTES}
     r = client.post('/transcribe', files={'file': ('../../secret.exe', b'voice', 'audio/webm')})
     assert poll(client, r)['raw_transcript'] == '안녕하세요'
     path, data, cfg = seen[0]
     assert data == b'voice' and cfg == {'model': 'base', 'language': 'ko', 'provider': 'local'}
     assert path.suffix == '.webm' and path.parent == home / 'cache' / 'scratch' / 'smart-dictation'
     assert not path.exists()
+
+
+def test_native_status_owner_metadata_and_invalid_policy(fixture, monkeypatch):
+    client, _, _, _ = fixture
+    state = {'stt': {'enabled': True, 'provider': 'smart_dictation', 'local': {}},
+             'plugins': {'entries': {'smart-dictation': {'settings': {'native': {'correction_enabled': True}}}}}}
+    monkeypatch.setitem(sys.modules, 'hermes_cli.config', SimpleNamespace(load_config_readonly=lambda: state))
+    monkeypatch.setattr(api._local, 'cache_available', lambda cfg: True)
+    data = client.get('/native-status?owner_profile=default').json()
+    assert data['profile'] == 'default' and data['version'] == '0.5.0'
+    assert data['native']['selected'] and data['native']['correction_enabled']
+    assert not data['native']['consent_valid'] and not data['native']['config_valid']
+    state['plugins']['entries']['smart-dictation']['settings']['native']['consent_version'] = 'native-v1'
+    data = client.get('/native-status').json()['native']
+    assert data['config_valid'] and data['consent_valid'] and data['cache_available'] and not data['model_load_tested']
+    assert client.get('/native-status?owner_profile=other').status_code == 403
 
 
 @pytest.mark.parametrize('url', ['/transcribe?owner_profile=other', '/transcribe?owner_profile=default&owner_profile=other', '/transcribe?foo=bar'])

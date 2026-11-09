@@ -9,8 +9,9 @@ Smart Dictation is a community plugin, not a Nous-maintained product. No respons
 ## Boundaries
 
 - Correction is a bounded text transformation, not an agent/tool dispatcher.
-- Optional context must be selected explicitly and treated as reference data.
-- Work belongs to the captured connection/profile/session and unchanged draft.
+- Optional context must be selected explicitly and treated as reference data. Native does not infer a session or import Contextual's references.
+- Contextual work belongs to its captured connection/profile/session and unchanged draft. Native inherits the core's insertion/undo behavior, not equivalent strict placement/restore guarantees; keep the intended conversation selected until it finishes.
+- Native correction is separately consented and profile-wide, initially OFF. On enabled correction failure, a fixed warning and the complete raw transcript intentionally become composer text. Ordinary dictation and separately enabled core voice-conversation submission modes remain distinct.
 - Credentials and provider recovery remain host-managed; this plugin must not read credential stores or invent consent.
 - Cancellation does not guarantee interruption of native decoding or a provider request already in progress.
 - A local installation or passing test is not a public multi-user security certification. See the README and current compatibility disclosures.

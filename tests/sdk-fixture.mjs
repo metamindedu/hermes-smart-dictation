@@ -5,6 +5,8 @@ export function atom(initial) { let value = initial; const ls = new Set(); retur
 export const useValue = a => useSyncExternalStore(a.subscribe, a.get, a.get)
 export const host = { state: { focusedSessionOwner:atom({connectionId:'local',profile:'default'}), focusedSessionId:atom('runtime-1'), focusedStoredSessionId:atom('saved-1'), connectionId:atom('local'), profile:atom('default'), busy:atom(false) }, profileRoutes:async()=>[{connectionId:'local',mode:'local',profile:'default',targetProfile:'default'}], composer: {getDraft:async()=>'',setDraft:async()=>true,insertText:async()=>true}, requestProfile:async()=>{throw new Error('unexpected network')} }
 export const Button = forwardRef(({variant,size,...p},ref)=>createElement('button',{...p,ref}))
+// Primitive boundary: the real SDK CopyButton owns protected clipboard delivery.
+export const CopyButton = ({text,label,disabled,onCopied,onCopyError})=>createElement('button',{disabled,onClick:async()=>{try{const value=typeof text==='function'?await text():text;await navigator.clipboard.writeText(value);onCopied?.()}catch(error){onCopyError?.(error)}}},label)
 export const Input = forwardRef((p,ref)=>createElement('input',{...p,ref}))
 export const Textarea = forwardRef((p,ref)=>createElement('textarea',{...p,ref}))
 export const Checkbox = ({checked,onCheckedChange,...p})=>createElement('input',{...p,type:'checkbox',checked,onChange:e=>onCheckedChange(e.target.checked)})

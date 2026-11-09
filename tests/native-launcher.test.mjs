@@ -26,7 +26,7 @@ test('native launcher focus ownership and explicit quick-record gestures',{skip:
  export {atom}; export {useStore as useValue} from ${JSON.stringify(require.resolve('@nanostores/react'))};
  export {Button} from ${JSON.stringify(path.join(core,'components/ui/button.tsx'))};
  export {Popover,PopoverTrigger,PopoverContent} from ${JSON.stringify(path.join(core,'components/ui/popover.tsx'))};
- export {usePluginI18n,Checkbox,Input,Textarea,Codicon,Select,SelectTrigger,SelectValue,SelectContent,SelectItem,COMPOSER_AREAS,PALETTE_AREA,queryClient} from './tests/sdk-fixture.mjs';
+ export {usePluginI18n,Checkbox,Input,Textarea,CopyButton,Codicon,Select,SelectTrigger,SelectValue,SelectContent,SelectItem,COMPOSER_AREAS,PALETTE_AREA,queryClient} from './tests/sdk-fixture.mjs';
  export const host={state:{focusedSessionOwner:atom({connectionId:'local',profile:'default'}),focusedSessionId:atom('runtime-1'),focusedStoredSessionId:atom('saved-1'),connectionId:atom('local'),profile:atom('default'),busy:atom(false)},profileRoutes:async()=>[{connectionId:'local',profile:'default',targetProfile:'default',mode:'local'}],composer:{getDraft:()=>'',setDraft:()=>true},requestProfile:async()=>{throw Error('unexpected request')}};`
  await mkdir('tests/.ui-fixture',{recursive:true})
  await build({entryPoints:['src/plugin.jsx'],outfile:'tests/.ui-fixture/native-launcher.mjs',bundle:true,format:'esm',platform:'node',banner:{js:"import {createRequire as fixtureRequire} from 'node:module';const require=fixtureRequire(import.meta.url);"},external:['react','react/jsx-runtime','react-dom','react-dom/client'],nodePaths:[path.join(source,'node_modules'),path.join(source,'apps/desktop/node_modules')],plugins:[{name:'native-fixture',setup(b){
@@ -95,5 +95,15 @@ test('native launcher focus ownership and explicit quick-record gestures',{skip:
   values.set('settings:'+JSON.stringify(['local','claire']),{startOnClick:true})
   await act(async()=>{document.querySelector('[data-smart-dictation-launcher]').click();await new Promise(r=>setTimeout(r,20))})
   assert.equal(mediaRequests,count,'unsupported owner never acquires media')
+  await act(async()=>{plugin.fixtureHost.state.focusedSessionOwner.set({connectionId:'local',profile:'fresh-native'});plugin.fixtureHost.state.profile.set('fresh-native')})
+  const nativeButton=document.querySelector('[data-smart-dictation-launcher]')
+  assert.equal(nativeButton.textContent,'Voice options')
+  const beforeNative={mediaRequests,requests}
+  if(document.querySelector('[data-smart-dictation-native]'))await act(async()=>{nativeButton.click();await new Promise(r=>setTimeout(r,20))})
+  assert.equal(document.querySelectorAll('[data-smart-dictation-native]').length,0)
+  await act(async()=>{nativeButton.click();await new Promise(r=>setTimeout(r,20))})
+  assert.equal(document.querySelectorAll('[data-smart-dictation-native]').length,1)
+  assert.deepEqual({mediaRequests,requests},beforeNative,'Native options never run the plugin recorder or backend on open')
+  assert.equal(document.querySelector('button[aria-label="Open panel without recording"]'),null)
  }finally{await act(async()=>root.unmount());for(const f of cleanup.reverse())f();if(navigatorDescriptor)Object.defineProperty(globalThis,'navigator',navigatorDescriptor);else delete globalThis.navigator;globalThis.MediaRecorder=previousRecorder;dom.window.close()}
 })

@@ -28,6 +28,7 @@ def profiles(monkeypatch, tmp_path):
     constants = SimpleNamespace(get_hermes_home=lambda: homes[current.get()],
         profile_name_for_home=lambda home: next(n for n, p in homes.items() if p == home))
     monkeypatch.setitem(sys.modules, 'hermes_constants', constants)
+    monkeypatch.setitem(sys.modules, 'hermes_cli.config', SimpleNamespace(load_config_readonly=lambda: {'stt': {'provider': 'local'}}))
     entered, release = threading.Event(), threading.Event()
     def decode(home, cfg, path):
         if cfg['name'] == 'alpha':
@@ -82,10 +83,12 @@ def test_profile_identity_cfg_owner_jobs_and_busy(profiles):
     assert client.post('/transcribe', headers=header('alpha'), files={'file': ('x', b'alpha', 'audio/wav')}).status_code == 429
     assert client.get('/transcribe/jobs/' + job, headers=header('beta')).status_code == 404
     beta = client.post('/transcribe', headers=header('beta'), files={'file': ('x', b'beta', 'audio/wav')})
-    assert beta.status_code == 202
-    assert wait_done(client, 'beta', beta.json()['job_id'])['raw_transcript'] == 'beta'
+    assert beta.status_code == 429
     release.set()
     assert wait_done(client, 'alpha', job)['raw_transcript'] == 'alpha'
+    beta = client.post('/transcribe', headers=header('beta'), files={'file': ('x', b'beta', 'audio/wav')})
+    assert beta.status_code == 202
+    assert wait_done(client, 'beta', beta.json()['job_id'])['raw_transcript'] == 'beta'
     assert not list((homes['alpha'] / 'cache/scratch/smart-dictation').iterdir())
     assert not (homes['default'] / 'cache').exists()
 

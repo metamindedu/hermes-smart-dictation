@@ -19,8 +19,15 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from starlette.datastructures import UploadFile
 
+_root_spec = importlib.util.spec_from_file_location('smart_dictation_root_loader', Path(__file__).resolve().parents[1] / '__init__.py')
+_root = importlib.util.module_from_spec(_root_spec)
+_root_spec.loader.exec_module(_root)
+_shared = _root._loader()
+_local = _shared.load('local_stt')
+_correction = _shared.load('correction')
+
 router = APIRouter()
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 MAX_AUDIO_BYTES = 12 * 1024 * 1024
 MAX_BODY_BYTES = MAX_AUDIO_BYTES + 64 * 1024
 MIMES = {"audio/webm": ".webm", "video/webm": ".webm", "audio/ogg": ".ogg", "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/mp4": ".mp4", "video/mp4": ".mp4"}
@@ -56,56 +63,12 @@ def _identity():
 
 
 def _stt():
-    """Freeze only nonsecret local settings in the current native owner scope."""
     from hermes_cli.config import load_config_readonly
-    root = load_config_readonly()
-    if not isinstance(root, dict) or not isinstance(root.get('stt', {}), dict):
-        raise ValueError('invalid STT configuration')
-    source = root.get('stt', {})
-    if source.get('enabled', True) is not True or source.get('provider') != 'local':
-        return None
-    local = source.get('local', {})
-    if not isinstance(local, dict):
-        raise ValueError('invalid local STT configuration')
-
-    def text(value, limit):
-        if not isinstance(value, str) or len(value) > limit:
-            raise ValueError('invalid local STT text')
-        return value.strip()
-
-    def number(value, low, high, integer=False):
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not low <= value <= high or (integer and not isinstance(value, int)):
-            raise ValueError('invalid local STT number')
-        return value
-
-    model = text(local.get('model', 'base'), 1024) or 'base'
-    # Faster-whisper only accepts built-in aliases or existing model directories.
-    aliases = {'tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large-v1', 'large-v2', 'large-v3', 'large', 'distil-large-v2', 'distil-medium.en', 'distil-small.en', 'distil-large-v3', 'large-v3-turbo', 'turbo', 'distil-large-v3.5'}
-    if model not in aliases and not Path(model).is_dir():
-        raise ValueError('invalid local model')
-    device = text(local.get('device', 'auto'), 20)
-    if device not in {'auto', 'cpu', 'cuda'}:
-        raise ValueError('unsupported local device')
-    compute = text(local.get('compute_type', 'auto'), 40)
-    if compute not in {'auto', 'default', 'int8', 'int8_float16', 'int8_float32', 'int8_bfloat16', 'int16', 'float16', 'float32', 'bfloat16'}:
-        raise ValueError('unsupported compute type')
-    language = text(local.get('language', ''), 32) or text(source.get('language', ''), 32) or None
-    prompt = text(local.get('initial_prompt', ''), 4000) or text(source.get('prompt', ''), 4000) or None
-    vad = local.get('vad', True)
-    if not isinstance(vad, bool):
-        raise ValueError('invalid VAD')
-    return {'model': model, 'device': device, 'compute_type': compute, 'language': language,
-            'initial_prompt': prompt, 'vad': vad,
-            'vad_min_silence_ms': number(local.get('vad_min_silence_ms', 500), 0, 60000, True),
-            'no_speech_prob_threshold': number(local.get('no_speech_prob_threshold', .6), 0, 1),
-            'logprob_threshold': number(local.get('logprob_threshold', -1.0), -100, 0)}
+    return _local.settings(load_config_readonly())
 
 
 def _has_faster_whisper():
-    try:
-        return importlib.util.find_spec('faster_whisper') is not None
-    except (ImportError, ValueError):
-        return False
+    return _local.library_available()
 
 
 def _owner_ok(request):
@@ -140,52 +103,14 @@ async def soul(request: Request):
         return _error(503, 'soul_unavailable')
 
 
-class STTUnavailable(Exception):
-    pass
-
+STTUnavailable = _local.STTUnavailable
+_MODELS = _local._MODELS
 
 def _load_model(home, cfg):
-    # Partition on the captured owner and entire effective settings projection.
-    key = (str(home), tuple(sorted(cfg.items())))
-    with _MODEL_LOCK:
-        if key not in _MODELS:
-            try:
-                from faster_whisper import WhisperModel
-                model = WhisperModel(cfg['model'], device=cfg['device'],
-                                     compute_type=cfg['compute_type'], local_files_only=True)
-            except Exception as exc:
-                raise STTUnavailable() from exc
-            if len(_MODELS) >= 2:
-                _MODELS.pop(next(iter(_MODELS)))
-            _MODELS[key] = model
-        return _MODELS[key]
-
+    return _local.load_model(home, cfg)
 
 def _decode_local(home, cfg, path):
-    model = _load_model(home, cfg)
-    segments, _ = model.transcribe(path, language=cfg['language'], task='transcribe',
-        beam_size=5, condition_on_previous_text=False, initial_prompt=cfg['initial_prompt'],
-        vad_filter=cfg['vad'], vad_parameters={'min_silence_duration_ms': cfg['vad_min_silence_ms']},
-        no_speech_threshold=cfg['no_speech_prob_threshold'], log_prob_threshold=cfg['logprob_threshold'])
-    pieces, length = [], 0
-    # The iterable is lazy: decode and enforce bounds inside the owner worker.
-    for segment in segments:
-        silence = segment.no_speech_prob
-        logprob = segment.avg_logprob
-        if (isinstance(silence, bool) or not isinstance(silence, (int, float)) or not math.isfinite(silence) or not 0 <= silence <= 1 or
-            isinstance(logprob, bool) or not isinstance(logprob, (int, float)) or not math.isfinite(logprob)):
-            raise ValueError('invalid segment metrics')
-        if silence > cfg['no_speech_prob_threshold'] and logprob < cfg['logprob_threshold']:
-            continue
-        if not isinstance(segment.text, str):
-            raise ValueError('invalid segment text')
-        piece = segment.text.strip()
-        if piece:
-            length += len(piece) + bool(pieces)
-            if length > 16000:
-                raise ValueError('transcript too large')
-            pieces.append(piece)
-    return ' '.join(pieces)
+    return _local.decode_local(path, owner_home=home, settings=cfg, max_seconds=180)
 
 
 @router.get('/status')
@@ -198,9 +123,50 @@ async def status(request: Request):
         cfg = _stt()
         with _GUARD:
             busy = _identity() in _BUSY
-        return {"ok": True, "transcription_busy": busy, "capabilities": ["async-transcription-v1"], "version": VERSION, "profile": _profile(), "stt": {"provider": 'local' if cfg else None, "model": cfg['model'] if cfg else None, "language": cfg['language'] if cfg else None, "available": bool(cfg and _has_faster_whisper()), "cache_verified": False}, "max_audio_bytes": MAX_AUDIO_BYTES}
+        from hermes_cli.config import load_config_readonly
+        configured = load_config_readonly().get('stt', {}).get('provider')
+        return {"ok": True, "transcription_busy": busy, "capabilities": ["async-transcription-v1"], "version": VERSION, "profile": _profile(), "configured_stt_provider": configured, "stt": {"provider": 'local' if cfg else None, "model": cfg['model'] if cfg else None, "language": cfg['language'] if cfg else None, "available": bool(cfg and _has_faster_whisper()), "cache_verified": False}, "max_audio_bytes": MAX_AUDIO_BYTES}
     except Exception:
         return _error(503, "status_unavailable")
+
+
+@router.get('/native-status')
+async def native_status(request: Request):
+    if not _owner_ok(request):
+        return _error(403, 'invalid_owner')
+    try:
+        from hermes_cli.config import load_config_readonly
+        root = load_config_readonly()
+        source = root.get('stt', {})
+        if not isinstance(source, dict):
+            raise ValueError('invalid stt')
+        selected = source.get('enabled', True) is True and source.get('provider') == 'smart_dictation'
+        enabled = consent = False
+        valid = False
+        cfg = None
+        try:
+            entries = root.get('plugins', {}).get('entries', {})
+            entry = entries.get('smart-dictation', {})
+            settings = entry.get('settings', {})
+            native = settings.get('native', entry.get('config', {}).get('native', {}))
+            if not isinstance(native, dict):
+                raise ValueError('invalid policy')
+            enabled = native.get('correction_enabled', False) is True
+            consent = native.get('consent_version') == 'native-v1'
+            _correction.policy(native)
+            if type(source.get('enabled', True)) is not bool:
+                raise ValueError('invalid enabled')
+            cfg = _local.settings({**root, 'stt': {**source, 'enabled': True, 'provider': 'smart_dictation'}})
+            valid = cfg is not None
+        except Exception:
+            pass
+        available = _has_faster_whisper()
+        return {'ok': True, 'profile': _profile(), 'version': VERSION, 'native': {
+            'selected': selected, 'correction_enabled': enabled, 'consent_valid': consent,
+            'config_valid': valid, 'library_available': available,
+            'cache_available': bool(valid and available and _local.cache_available(cfg)), 'model_load_tested': False}}
+    except Exception:
+        return _error(503, 'status_unavailable')
 
 
 def _run_audio(home, audio, suffix, cfg):
@@ -248,7 +214,7 @@ async def transcribe(request: Request):
         return _error(503, "stt_unavailable")
     identity = _identity()
     with _GUARD:
-        if identity in _BUSY:
+        if identity in _BUSY or not _local.SLOT.acquire(blocking=False):
             return _error(429, "busy")
         _BUSY.add(identity)
     handed_off = False
@@ -305,6 +271,7 @@ async def transcribe(request: Request):
         if not handed_off:
             with _GUARD:
                 _BUSY.discard(identity)
+                _local.SLOT.release()
 
 
 def _expire(job_id):
@@ -326,6 +293,7 @@ def _job_worker(identity, job_id, home, audio, suffix, cfg):
         audio = None
     with _GUARD:
         _BUSY.discard(identity)
+        _local.SLOT.release()
         job = _JOBS.get(job_id)
         if job is None:
             return
