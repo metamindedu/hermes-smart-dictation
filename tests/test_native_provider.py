@@ -25,8 +25,11 @@ def fixture(monkeypatch,tmp_path):
     ctx=SimpleNamespace(get_config=lambda key,default:state['policy'], llm=SimpleNamespace(complete=complete))
     return provider.SmartDictationProvider(ctx,tmp_path,local,correction),state,local,correction
 
-def test_default_disabled_and_no_speech(fixture):
-    p,s,_,_=fixture
+def test_default_on_without_consent_preserves_raw_and_no_speech(fixture):
+    p,s,_,c=fixture
+    assert c.policy({}) == (True, False)
+    assert p.transcribe('file')['transcript']==c.WARNING+'raw words' and not s['calls']
+    s['policy']={'correction_enabled':False}
     assert p.transcribe('file')['transcript']=='raw words' and not s['calls']
     s['policy']={'correction_enabled':True,'consent_version':'native-v1'}; s['raw']=''
     assert p.transcribe('file')['transcript']=='' and not s['calls']
@@ -83,3 +86,24 @@ def test_reasoning_only_override_still_allows_one_bounded_correction(fixture):
     s['root']['auxiliary']={'smart_dictation_correction':{'extra_body':{'reasoning':{'effort':'low'}}}}
     assert p.transcribe('file')['transcript']=='corrected'
     assert len(s['calls'])==1
+
+
+def test_default_on_with_recorded_consent_and_explicit_off_preserved(fixture):
+    p,s,_,c=fixture
+    s['policy']={'consent_version':'native-v1'}
+    assert c.policy(s['policy']) == (True, True)
+    assert p.transcribe('file')['transcript']=='corrected'
+    assert len(s['calls'])==1
+    s['policy']={'correction_enabled':False,'consent_version':'native-v1'}
+    assert c.policy(s['policy']) == (False, True)
+    assert p.transcribe('file')['transcript']=='raw words'
+    assert len(s['calls'])==1
+
+
+def test_fresh_default_never_invents_consent_or_mutates_settings(fixture):
+    import copy
+    p,s,_,c=fixture
+    before=copy.deepcopy(s['policy'])
+    result=p.transcribe('file')
+    assert result['success'] and result['transcript']==c.WARNING+s['raw']
+    assert s['calls']==[] and s['policy']==before

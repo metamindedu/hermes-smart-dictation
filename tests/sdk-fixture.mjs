@@ -1,5 +1,6 @@
 import { createElement, forwardRef, useSyncExternalStore, Children } from 'react'
 import { locales } from '../src/locales.mjs'
+export const useI18n = () => ({t:{composer:{voiceDictation:'Voice dictation'}}})
 export const usePluginI18n = () => (key, ...args) => typeof locales.en[key] === 'function' ? locales.en[key](...args) : locales.en[key] || key
 export function atom(initial) { let value = initial; const ls = new Set(); return { get:()=>value, set:v=>{value=v; for(const f of ls) f()}, subscribe:f=>{ls.add(f); return ()=>ls.delete(f)} } }
 export const useValue = a => useSyncExternalStore(a.subscribe, a.get, a.get)
@@ -16,6 +17,8 @@ export const PopoverTrigger = ({children})=>children
 export const PopoverContent = ({children,...p})=>createElement('div',{},children)
 export const COMPOSER_AREAS={actions:'composer.actions'}
 export const PALETTE_AREA='palette'
+export const pluginSettingsHref=(id,page)=>'/settings?tab=plugins&plugin='+encodeURIComponent(id)+(page?'&ppage='+encodeURIComponent(page):'')
+host.navigate=url=>{host.lastNavigation=url}
 export const queryClient={fetchQuery(){throw new Error('unexpected job query in UI fixture')},removeQueries(){}}
 export const SelectTrigger=()=>null
 export const SelectValue=()=>null

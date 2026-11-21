@@ -1,6 +1,14 @@
 # Native-first redesign: acceptance criteria
 
-This is the product acceptance baseline, not a claim that implementation or deployment is complete. The released-host public-API architecture was independently reviewed before dependent implementation.
+This is the product acceptance baseline, not a claim that implementation or deployment is complete. The released-host public-API architecture was independently reviewed before dependent implementation. The Native-first defaults below are historical; the approved 2026-11-12 phase-1 amendment supersedes them without declaring the original all-profile first-install outcome complete.
+
+## Phase-1 amendment: common UI modes, not backend enrollment
+
+- Fresh absent client preferences inherit a common Contextual presentation mode. Existing explicit Native/Contextual and legacy choices remain unchanged. Explicit inheritance survives unrelated saves; common saves do not create profile overrides or grant backend/correction consent.
+- Native fresh policy requests correction ON but does not execute without recorded profile-wide transmission consent. Explicit saved OFF remains OFF; this is separate from the UI mode.
+- The optional original-context readiness RPC reports only non-atomic declarations and registration-handle observations. Cache/model/ASR/correction execution, registry identity, resolved account/recovery and strict final-wire tool prevention remain unverified. No aggregate ready/safe flag or strict correction endpoint is exposed. Missing/older endpoints do not disable existing execution or invoke a looser fallback.
+- Core idle microphones and stop controls remain reachable during every phase. The current public actions slot supplies no per-composer owner, so global focus/active work is insufficient to target a hiding rule. Fail open for every mounted launcher, including an operation started from Advanced settings; do not modify Core or infer ownership from a DOM position.
+- New profiles inherit only a UI default and still need normal profile-scoped backend preparation. No shared engine or shared correction payer is approved. Cold installation, all-profile setup, actual device/provider execution, deployment and publication remain separate unmet gates unless independently verified.
 
 ## Approved Native policy
 
@@ -17,7 +25,7 @@ Make ordinary dictation use Hermes' existing microphone, recording transport and
 
 - Use released Hermes 0.23.0 public APIs, including the provider registrar and host-owned `ctx.llm` facade. Never copy another plugin's private decoder/LLM imports merely because its catalog pin is admitted.
 - Registering, mounting, installing, discovering profiles and opening settings do not capture audio, run inference, transmit context, download weights or modify another profile.
-- Local decoding remains local. No automatic cloud STT fallback or model download. Correction uses a bounded tool-free completion, never an agent turn. Native account, cost, override and recovery policy stays in force.
+- Local decoding remains local. No automatic cloud STT fallback or model download. Correction uses a bounded completion, never a new agent turn. The plugin supplies no tool dispatcher, but native task/destination/recovery extensions and text-only metadata projection prevent certification of strict tool-free final requests. Preserve existing execution; do not claim that this requirement was proved. Native account, cost, override and recovery policy stays in force.
 - A selected native provider is not all-profile enrollment. Exact local targets are reviewed by the user; explicit OFF, other providers, models, accounts and unrelated settings are preserved unless the relevant change is separately authorized.
 - Do not infer session identity from the newest conversation or a process-global active profile. Native provider context contains no session identity unless proved end to end. Session-aware features remain in the supported Advanced path if native transport cannot provide that identity.
 - Trace native correction failure and result projection. Do not promise visible raw/corrected comparison, failure notices or restore in native mode when core ignores extra fields. Define an honest no-data-loss behavior before claiming native-mode parity.

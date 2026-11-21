@@ -12,7 +12,7 @@ test('native synchronous draft bus never writes a switched primary session', {sk
   await mkdir('tests/.ui-fixture',{recursive:true})
   await build({entryPoints:[source+'/apps/desktop/src/app/chat/composer/focus.ts'],outfile:'tests/.ui-fixture/native-focus.mjs',bundle:true,format:'esm',platform:'node',plugins:[{name:'isolate-native-dependencies',setup(b){
     b.onResolve({filter:/^@\/|^\.\/floating-state$|^\.\/rich-editor$/},a=>({path:a.path,namespace:'native-fixture'}))
-    b.onLoad({filter:/.*/,namespace:'native-fixture'},()=>({contents:"export const isElementInHiddenPane=()=>false, queryAllVisible=()=>[], queryVisible=()=>null, $hoveredTreeGroup={get:()=>null}, $floatingComposerOwner={get:()=>null}, subscribePreviewAnnotateHandoff=()=>()=>{}, dataUrlToBlob=()=>null, RICH_INPUT_SLOT='fixture';",loader:'js'}))
+    b.onLoad({filter:/.*/,namespace:'native-fixture'},()=>({contents:"export const isElementInHiddenPane=()=>false, queryAllVisible=()=>[], queryVisible=()=>null, $hoveredTreeGroup={get:()=>null}, $floatingComposerOwner={get:()=>null}, subscribePreviewAnnotateHandoff=()=>()=>{}, dataUrlToBlob=()=>null, RICH_INPUT_SLOT='fixture', newSessionDraftAnnouncedFor=()=>false, pendingNewSessionDraftKey=()=>null, placeCaretEnd=()=>{};",loader:'js'}))
   }}]})
   const bus=await import('./.ui-fixture/native-focus.mjs')
   let active='A';const drafts={A:'A original',B:'B private draft'}

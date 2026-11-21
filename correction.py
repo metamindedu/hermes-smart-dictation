@@ -8,11 +8,12 @@ FORBIDDEN = {'tools','tool_choice','functions','function_call','plugins','web_se
 def policy(value):
     if not isinstance(value, dict):
         raise ValueError('invalid native policy')
-    enabled = value.get('correction_enabled', False)
+    enabled = value.get('correction_enabled', True)
     if type(enabled) is not bool:
         raise ValueError('invalid native policy')
     consent = value.get('consent_version') == 'native-v1'
-    if enabled and not consent:
+    # A fresh default is ON-requested, never an implicit transmission grant.
+    if enabled and not consent and 'correction_enabled' in value:
         raise ValueError('missing consent')
     return enabled, consent
 

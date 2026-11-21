@@ -7,7 +7,7 @@ def _loader():
     from pathlib import Path
     import sys
     path = Path(__file__).resolve().with_name('shared_loader.py')
-    key = '_smart_dictation_loader_' + hashlib.sha256(str(path).encode()).hexdigest()
+    key = '_smart_dictation_loader_052_' + hashlib.sha256(str(path).encode()).hexdigest()
     _imp.acquire_lock()
     try:
         if key not in sys.modules:
@@ -24,8 +24,9 @@ def register(ctx):
     loader = _loader()
     local = loader.load('local_stt')
     correction = loader.load('correction')
-    provider = loader.load('native_provider').SmartDictationProvider(ctx, get_hermes_home(), local, correction)
-    ctx.register_auxiliary_task(
+    home = get_hermes_home()
+    provider = loader.load('native_provider').SmartDictationProvider(ctx, home, local, correction)
+    task_handle = ctx.register_auxiliary_task(
         'smart_dictation_correction',
         display_name='Smart Dictation correction',
         description='Correct a dictated transcript without tools.',
@@ -33,3 +34,8 @@ def register(ctx):
     )
     ctx.register_transcription_provider(provider)
     ctx.on_unload(provider.close)
+    registrar = getattr(ctx, 'register_rpc', None)
+    if registrar is not None:
+        bridge = loader.load('readiness').ReadinessBridge(ctx, home, task_handle, correction.policy)
+        ctx.on_unload(bridge.close)
+        registrar('readiness', bridge)

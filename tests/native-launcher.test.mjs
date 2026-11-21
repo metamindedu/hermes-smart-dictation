@@ -26,8 +26,8 @@ test('native launcher focus ownership and explicit quick-record gestures',{skip:
  export {atom}; export {useStore as useValue} from ${JSON.stringify(require.resolve('@nanostores/react'))};
  export {Button} from ${JSON.stringify(path.join(core,'components/ui/button.tsx'))};
  export {Popover,PopoverTrigger,PopoverContent} from ${JSON.stringify(path.join(core,'components/ui/popover.tsx'))};
- export {usePluginI18n,Checkbox,Input,Textarea,CopyButton,Codicon,Select,SelectTrigger,SelectValue,SelectContent,SelectItem,COMPOSER_AREAS,PALETTE_AREA,queryClient} from './tests/sdk-fixture.mjs';
- export const host={state:{focusedSessionOwner:atom({connectionId:'local',profile:'default'}),focusedSessionId:atom('runtime-1'),focusedStoredSessionId:atom('saved-1'),connectionId:atom('local'),profile:atom('default'),busy:atom(false)},profileRoutes:async()=>[{connectionId:'local',profile:'default',targetProfile:'default',mode:'local'}],composer:{getDraft:()=>'',setDraft:()=>true},requestProfile:async()=>{throw Error('unexpected request')}};`
+ export {useI18n,usePluginI18n,Checkbox,Input,Textarea,CopyButton,Codicon,Select,SelectTrigger,SelectValue,SelectContent,SelectItem,COMPOSER_AREAS,PALETTE_AREA,queryClient,pluginSettingsHref} from './tests/sdk-fixture.mjs';
+ export const host={state:{focusedSessionOwner:atom({connectionId:'local',profile:'default'}),focusedSessionId:atom('runtime-1'),focusedStoredSessionId:atom('saved-1'),connectionId:atom('local'),profile:atom('default'),busy:atom(false)},profileRoutes:async()=>[{connectionId:'local',profile:'default',targetProfile:'default',mode:'local'}],composer:{getDraft:()=>'',setDraft:()=>true},navigate:url=>{host.lastNavigation=url},requestProfile:async()=>{throw Error('unexpected request')}};`
  await mkdir('tests/.ui-fixture',{recursive:true})
  await build({entryPoints:['src/plugin.jsx'],outfile:'tests/.ui-fixture/native-launcher.mjs',bundle:true,format:'esm',platform:'node',banner:{js:"import {createRequire as fixtureRequire} from 'node:module';const require=fixtureRequire(import.meta.url);"},external:['react','react/jsx-runtime','react-dom','react-dom/client'],nodePaths:[path.join(source,'node_modules'),path.join(source,'apps/desktop/node_modules')],plugins:[{name:'native-fixture',setup(b){
   b.onResolve({filter:/^@hermes\/plugin-sdk$/},()=>({path:'sdk',namespace:'fixture'}))
@@ -44,16 +44,17 @@ test('native launcher focus ownership and explicit quick-record gestures',{skip:
  const stream=()=>{const track={stops:0,stop(){this.stops++}};tracks.push(track);return{getTracks:()=>[track]}}
  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{getUserMedia:()=>{mediaRequests++;return permission||Promise.resolve(stream())}}}})
  globalThis.MediaRecorder=class{static isTypeSupported(){return true}constructor(){this.state='inactive';this.mimeType='audio/webm'}start(){this.state='recording'}stop(){this.state='inactive';queueMicrotask(()=>this.onstop?.())}}
- plugin.default.register({i18n:{register(){},t:k=>k},storage:{get:(k,d)=>values.has(k)?values.get(k):d,set:(k,v)=>values.set(k,v)},rest:async url=>{requests++;assert.ok(url.startsWith('/status'));return{ok:true,profile:'default',stt:{provider:'local',available:true},max_audio_bytes:1000}},register:r=>registrations.push(r),registerSettingsPage(){},onDispose:f=>cleanup.push(f)})
+ plugin.default.register({i18n:{register(){},t:k=>k},storage:{get:(k,d)=>values.has(k)?values.get(k):d,set:(k,v)=>values.set(k,v)},rest:async url=>{requests++;assert.ok(url.startsWith('/status'));return{ok:true,profile:'default',stt:{provider:'local',available:true},max_audio_bytes:1000}},register:r=>registrations.push(r),registerSettingsPage(){},addEventListener:(target,type,fn)=>{target.addEventListener(type,fn);cleanup.push(()=>target.removeEventListener(type,fn))},onDispose:f=>cleanup.push(f)})
  const root=createRoot(document.getElementById('root'))
  try{
   await act(async()=>root.render(createElement(plugin.Launcher)))
   await act(async()=>{document.querySelector('button').click();await new Promise(r=>setTimeout(r,30))})
   assert.equal(document.querySelectorAll('[data-smart-dictation-panel]').length,1,'single native launcher control must open')
+  assert.ok(document.querySelector('[data-slot="popover-content"]').style.maxHeight.includes('--radix-popover-content-available-height'),'the panel must respect native collision space, not just viewport height')
   await act(async()=>{document.querySelector('button').click();await new Promise(r=>setTimeout(r,30))})
   await act(async()=>root.render(createElement('div',{},createElement(plugin.Launcher),createElement(plugin.Launcher))))
   assert.equal(document.querySelectorAll('[data-smart-dictation-panel]').length,0)
-  const buttons=[...document.querySelectorAll('button')].filter(b=>b.textContent.includes('Proofread'))
+  const buttons=[...document.querySelectorAll('button')].filter(b=>b.hasAttribute('data-smart-dictation-launcher'))
   assert.equal(buttons.length,2)
   await act(async()=>{buttons[0].click();await new Promise(r=>setTimeout(r,30))})
   assert.equal(document.querySelectorAll('[data-smart-dictation-panel]').length,1,'one clicked launcher must open one panel, not every mounted composer')
@@ -69,21 +70,26 @@ test('native launcher focus ownership and explicit quick-record gestures',{skip:
   assert.equal(mediaRequests,0,'saving opt-in never starts media')
   assert.equal([...values.values()][0].startOnClick,true)
   const main=[...document.querySelectorAll('[data-smart-dictation-launcher]')]
-  assert.equal(main[0].textContent,'Record')
+  assert.equal(main[0].textContent,'','compact toolbar has no visible text label')
+  assert.equal(main[0].getAttribute('aria-label'),'Start recording')
+  assert.equal(main[0].style.width,'28px')
   for(const b of main)b.getClientRects=()=>[{width:80,height:30}]
   await act(async()=>{document.querySelector('button[aria-label="Open panel without recording"]').click();await new Promise(r=>setTimeout(r,20))})
   assert.equal(mediaRequests,0,'panel-only arrow never starts media')
   await act(async()=>{registrations.find(r=>r.id==='open').data.run();await new Promise(r=>setTimeout(r,20))})
-  assert.equal(document.querySelectorAll('[data-smart-dictation-panel]').length,1)
+  assert.ok(plugin.fixtureHost.lastNavigation.includes('plugin=smart-dictation%3Asettings'))
   assert.equal(mediaRequests,0,'palette never starts media even with opt-in')
   await act(async()=>{main[0].click();main[0].click();await new Promise(r=>setTimeout(r,20))})
   assert.equal(mediaRequests,1,'rapid main clicks start only one recording')
   assert.equal(requests,1)
-  assert.equal(main[0].textContent,'Stop')
+  assert.equal(main[0].textContent,'')
+  assert.equal(main[0].getAttribute('aria-label'),'Stop and proofread')
   assert.equal(document.querySelectorAll('[data-smart-dictation-panel]').length,1)
+  assert.equal(document.querySelectorAll('[data-smart-dictation-mic-style]').length,0,'focus-global work cannot prove an owning composer, so Core controls stay available')
   await act(async()=>{main[0].click();await new Promise(r=>setTimeout(r,20))})
   assert.equal(tracks[0].stops,1,'second main gesture stops and releases media')
   assert.equal(requests,1,'empty synthetic recording never calls ASR or a model')
+  assert.equal(document.querySelectorAll('[data-smart-dictation-mic-style]').length,0,'failed empty recording restores Core controls')
   let resolve;permission=new Promise(r=>{resolve=r})
   await act(async()=>{main[0].click();await new Promise(r=>setTimeout(r,20))})
   assert.equal(mediaRequests,2)
@@ -91,19 +97,26 @@ test('native launcher focus ownership and explicit quick-record gestures',{skip:
   await act(async()=>{resolve(stream());await new Promise(r=>setTimeout(r,20))})
   assert.equal(tracks[1].stops,1,'late permission result after session switch is discarded')
   const count=mediaRequests
-  await act(async()=>{plugin.fixtureHost.state.focusedSessionOwner.set({connectionId:'local',profile:'claire'});plugin.fixtureHost.state.profile.set('claire')})
   values.set('settings:'+JSON.stringify(['local','claire']),{startOnClick:true})
+  await act(async()=>{plugin.fixtureHost.state.focusedSessionOwner.set({connectionId:'local',profile:'claire'});plugin.fixtureHost.state.profile.set('claire')})
   await act(async()=>{document.querySelector('[data-smart-dictation-launcher]').click();await new Promise(r=>setTimeout(r,20))})
   assert.equal(mediaRequests,count,'unsupported owner never acquires media')
+  values.set('settings:'+JSON.stringify(['local','fresh-native']),{workflow:'native'})
   await act(async()=>{plugin.fixtureHost.state.focusedSessionOwner.set({connectionId:'local',profile:'fresh-native'});plugin.fixtureHost.state.profile.set('fresh-native')})
-  const nativeButton=document.querySelector('[data-smart-dictation-launcher]')
-  assert.equal(nativeButton.textContent,'Voice options')
-  const beforeNative={mediaRequests,requests}
-  if(document.querySelector('[data-smart-dictation-native]'))await act(async()=>{nativeButton.click();await new Promise(r=>setTimeout(r,20))})
+  assert.equal(document.querySelector('[data-smart-dictation-launcher]'),null,'Native uses the existing Core mic, not an options launcher')
   assert.equal(document.querySelectorAll('[data-smart-dictation-native]').length,0)
-  await act(async()=>{nativeButton.click();await new Promise(r=>setTimeout(r,20))})
-  assert.equal(document.querySelectorAll('[data-smart-dictation-native]').length,1)
-  assert.deepEqual({mediaRequests,requests},beforeNative,'Native options never run the plugin recorder or backend on open')
+  values.set('settings:'+JSON.stringify(['local','fresh-native']),{workflow:'contextual',startOnClick:false})
+  await act(async()=>window.dispatchEvent(new dom.window.StorageEvent('storage',{key:'hermes.plugin.unrelated.settings:ignored'})))
+  assert.equal(document.querySelector('[data-smart-dictation-launcher]'),null,'foreign storage notifications do not trigger adoption')
+  await act(async()=>window.dispatchEvent(new dom.window.StorageEvent('storage',{key:'hermes.plugin.smart-dictation.settings:'+JSON.stringify(['local','fresh-native'])})))
+  assert.ok(document.querySelector('[data-smart-dictation-launcher]'),'a scoped cross-window preference update shows Context record')
+  assert.equal(mediaRequests,count,'cross-window settings adoption never captures audio')
+  const beforeNative={mediaRequests,requests}
+  await act(async()=>registrations.find(r=>r.id==='open').data.run())
+  assert.equal(plugin.fixtureHost.lastNavigation,'/settings?tab=plugins&plugin=smart-dictation%3Asettings')
+  await act(async()=>registrations.find(r=>r.id==='advanced').data.run())
+  assert.equal(plugin.fixtureHost.lastNavigation,'/settings?tab=plugins&plugin=smart-dictation%3Asettings&ppage=advanced')
+  assert.deepEqual({mediaRequests,requests},beforeNative,'Settings and Advanced navigation never record, request data or invoke a model')
   assert.equal(document.querySelector('button[aria-label="Open panel without recording"]'),null)
  }finally{await act(async()=>root.unmount());for(const f of cleanup.reverse())f();if(navigatorDescriptor)Object.defineProperty(globalThis,'navigator',navigatorDescriptor);else delete globalThis.navigator;globalThis.MediaRecorder=previousRecorder;dom.window.close()}
 })

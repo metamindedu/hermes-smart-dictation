@@ -23,9 +23,17 @@ export function NativeStatus({ capture, backend }) {
   const allowed = validLocalTarget(capture())
   useEffect(() => {
     mounted.current = true
-    const invalidate = () => { epoch.current++; pending.current = false; if (mounted.current) { setSnapshot(null); setLoading(false); setFailed(false) } }
+    const liveScope = () => JSON.stringify([ownerKey(host.state.focusedSessionOwner.get()), host.state.connectionId.get(), host.state.profile.get()])
+    let observed = liveScope()
+    const invalidate = () => {
+      const next = liveScope()
+      if (next === observed) return
+      observed = next
+      epoch.current++; pending.current = false
+      if (mounted.current) { setSnapshot(null); setLoading(false); setFailed(false) }
+    }
     const disposers = [host.state.focusedSessionOwner, host.state.connectionId, host.state.profile].map(atom => atom.subscribe(invalidate))
-    return () => { mounted.current = false; invalidate(); for (const dispose of disposers) dispose() }
+    return () => { mounted.current = false; epoch.current++; pending.current = false; for (const dispose of disposers) dispose() }
   }, [backend])
   useEffect(() => { setSnapshot(null); setFailed(false); setLoading(false) }, [scope])
   const current = token => mounted.current && token === epoch.current && validLocalTarget(capture()) && ownerKey(capture().owner) === ownerKey(owner) && capture().activeConnectionId === connection && capture().activeProfile === profile

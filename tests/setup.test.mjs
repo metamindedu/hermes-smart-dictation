@@ -49,9 +49,10 @@ test('native and contextual requests make different preparation paths explicit',
   assert.ok(setupRequest([],{language:'ko'}).includes('제가 대상을 확인하기 전에는 변경하지 마세요'))
 })
 test('Native setup separates provider selection, profile-wide correction consent and paid tests',()=>{
-  const plain=setupRequest(['alpha'],{native:true})
+  const plain=setupRequest(['alpha'],{native:true,nativeCorrection:false})
   assert.ok(plain.includes('stt.provider = smart_dictation'))
-  assert.ok(plain.includes('leave correction OFF'))
+  assert.ok(plain.includes('correction_enabled = false'))
+  assert.ok(setupRequest(['alpha'],{native:true}).includes('correction_enabled = true'))
   assert.ok(!plain.includes('correction_enabled = true'))
   const correction=setupRequest(['alpha'],{native:true,nativeCorrection:true})
   for(const required of ['other voice processing','obtain my consent','consent_version = native-v1','Do not run a paid test','warning line plus the entire original transcript'])assert.ok(correction.includes(required),required)

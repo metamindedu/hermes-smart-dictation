@@ -65,7 +65,7 @@ def test_native_status_owner_metadata_and_invalid_policy(fixture, monkeypatch):
     monkeypatch.setitem(sys.modules, 'hermes_cli.config', SimpleNamespace(load_config_readonly=lambda: state))
     monkeypatch.setattr(api._local, 'cache_available', lambda cfg: True)
     data = client.get('/native-status?owner_profile=default').json()
-    assert data['profile'] == 'default' and data['version'] == '0.5.0'
+    assert data['profile'] == 'default' and data['version'] == '0.5.2'
     assert data['native']['selected'] and data['native']['correction_enabled']
     assert not data['native']['consent_valid'] and not data['native']['config_valid']
     state['plugins']['entries']['smart-dictation']['settings']['native']['consent_version'] = 'native-v1'

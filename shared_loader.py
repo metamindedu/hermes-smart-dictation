@@ -9,7 +9,7 @@ _LOCK = threading.RLock()
 
 def load(name):
     path = Path(__file__).resolve().parent / (name + '.py')
-    key = '_smart_dictation_050_' + hashlib.sha256(str(path).encode()).hexdigest()
+    key = '_smart_dictation_052_' + hashlib.sha256(str(path).encode()).hexdigest()
     with _LOCK:
         if key not in sys.modules:
             spec = importlib.util.spec_from_file_location(key, path)

@@ -27,7 +27,7 @@ _local = _shared.load('local_stt')
 _correction = _shared.load('correction')
 
 router = APIRouter()
-VERSION = "0.5.0"
+VERSION = "0.5.2"
 MAX_AUDIO_BYTES = 12 * 1024 * 1024
 MAX_BODY_BYTES = MAX_AUDIO_BYTES + 64 * 1024
 MIMES = {"audio/webm": ".webm", "video/webm": ".webm", "audio/ogg": ".ogg", "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/mp4": ".mp4", "video/mp4": ".mp4"}
@@ -155,7 +155,7 @@ async def native_status(request: Request):
             native = settings.get('native', entry.get('config', {}).get('native', {}))
             if not isinstance(native, dict):
                 raise ValueError('invalid policy')
-            enabled = native.get('correction_enabled', False) is True
+            enabled = native.get('correction_enabled', True) is True
             consent = native.get('consent_version') == 'native-v1'
             _correction.policy(native)
             if type(source.get('enabled', True)) is not bool:

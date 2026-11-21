@@ -19,7 +19,7 @@ export function SetupGuide({ ctx, native = false, forceOpen = false, settingsPag
   const [inventory, setInventory] = useState({ scope: '', profiles: [], selected: [], loaded: false })
   const [loading, setLoading] = useState('')
   const [feedback, setFeedback] = useState('')
-  const [requestCorrection, setRequestCorrection] = useState(false)
+  const [requestCorrection, setRequestCorrection] = useState(native)
   const sequence = useRef(0)
   const inflight = useRef(false)
   const mounted = useRef(false)
@@ -31,25 +31,29 @@ export function SetupGuide({ ctx, native = false, forceOpen = false, settingsPag
 
   useEffect(() => {
     mounted.current = true
-    // Invalidate even an A -> B -> A transition batched into one render.
+    // Invalidate genuine A -> B -> A changes, not equivalent source notifications.
+    let observedScope = liveScope()
     const invalidate = () => {
+      const next = liveScope()
+      if (next === observedScope) return
+      observedScope = next
       sequence.current++; inflight.current = false
       if (mounted.current) {
-        setLoading(''); setFeedback(''); setRequestCorrection(false)
+        setLoading(''); setFeedback(''); setRequestCorrection(native)
         setInventory({ scope: '', profiles: [], selected: [], loaded: false })
       }
     }
     const disposers = [host.state.connectionId, host.state.profile].map(a => a.subscribe(invalidate))
-    return () => { mounted.current = false; invalidate(); for (const dispose of disposers) dispose() }
+    return () => { mounted.current = false; sequence.current++; inflight.current = false; for (const dispose of disposers) dispose() }
   }, [ctx])
   useEffect(() => {
     sequence.current++; inflight.current = false
     setInventory({ scope: '', profiles: [], selected: [], loaded: false })
-    setLoading(''); setFeedback(''); setRequestCorrection(false)
+    setLoading(''); setFeedback(''); setRequestCorrection(native)
     setView({ scope, open: settingsPage || !hidden() })
   }, [scope, ctx, settingsPage])
   useEffect(() => { if (forceOpen) setView({ scope, open: true }) }, [forceOpen, scope])
-  useEffect(() => { setFeedback(''); setRequestCorrection(false) }, [native])
+  useEffect(() => { setFeedback(''); setRequestCorrection(native) }, [native])
 
   const load = async () => {
     if (!scope || liveScope() !== scope || inflight.current) return

@@ -1,5 +1,5 @@
 name: smart-dictation
-version: 0.5.0
+version: 0.5.2
 requires_hermes: ">=0.23.0"
 description: Native local dictation with optional tool-free correction and advanced contextual review
 provides_transcription_providers:

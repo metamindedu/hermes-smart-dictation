@@ -33,7 +33,7 @@ def test_registration_is_one_aux_task(monkeypatch, tmp_path):
 
 
 def test_versioned_entry_exposes_the_canonical_routes_without_import_io():
-    entry = ROOT / 'dashboard' / 'api_v0_5.py'
+    entry = ROOT / 'dashboard' / 'api_v0_5_2.py'
     spec = importlib.util.spec_from_file_location('smart_dictation_versioned_entry_test', entry)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -43,7 +43,7 @@ def test_versioned_entry_exposes_the_canonical_routes_without_import_io():
     paths = set(app.openapi()['paths'])
     assert {'/status', '/native-status', '/soul', '/transcribe', '/transcribe/jobs/{job_id}'} <= paths
     assert '/correction-model' not in paths
-    assert module._impl.VERSION == '0.5.0'
+    assert module._impl.VERSION == '0.5.2'
 
 
 def test_entry_import_does_not_touch_profile_or_config(monkeypatch):

@@ -72,6 +72,8 @@ def test_cache_owner_settings_and_local_files_only(config, monkeypatch, tmp_path
     assert all(k['local_files_only'] is True for _, k in made)
     assert made[0][1]['use_auth_token'] is False
     assert made[0][1]['files']['tokenizer.json'] == b'fixture'
+    assert all(isinstance(value, bytes) for _, kwargs in made for value in kwargs['files'].values())
+    assert all(kwargs['files']['model.bin'] == b'fixture' and kwargs['files']['vocabulary.json'] == b'fixture' for _, kwargs in made)
     api._MODELS.clear()
 
 

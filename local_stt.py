@@ -96,13 +96,14 @@ def load_model(home, cfg):
                     if not f.seek(0, 2):
                         raise ValueError('empty model file')
                     f.seek(0)
-                    files[name] = f
+                    # Bytes avoid native file-like callbacks (Windows CTranslate2 4.8.1 can crash there).
+                    files[name] = f.read()
                 vocab = next(n for n in ('vocabulary.json','vocabulary.txt') if (p / n).is_file())
                 f = stack.enter_context((p / vocab).open('rb'))
                 if not f.seek(0, 2):
                     raise ValueError('empty vocabulary')
                 f.seek(0)
-                files[vocab] = f
+                files[vocab] = f.read()
                 for name in ('tokenizer.json','preprocessor_config.json'):
                     if name == 'preprocessor_config.json' and not (p / name).exists():
                         continue

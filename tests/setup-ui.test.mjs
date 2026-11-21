@@ -140,15 +140,18 @@ test('Native correction checkbox only edits a request and resets on source chang
  const h=await mount({native:true})
  try {
   const checkbox=document.querySelector('input[aria-label="Include optional Native correction setup in the request"]')
+  assert.equal(checkbox.checked,true,'Native preparation defaults to correction ON')
+  assert.ok(h.request().includes('correction_enabled = true'))
+  assert.ok(h.request().includes('obtain my consent'),'checked default is not a transmission grant')
+  await act(async()=>checkbox.click())
   assert.equal(checkbox.checked,false)
   assert.ok(!h.request().includes('correction_enabled = true'))
-  await act(async()=>checkbox.click())
-  assert.ok(h.request().includes('correction_enabled = true'))
-  assert.ok(h.request().includes('obtain my consent'))
+  await act(async()=>host.state.profile.set('default'))
+  assert.equal(checkbox.checked,false,'equivalent source notification preserves an explicit OFF draft')
   assert.equal(h.calls.writes,0);assert.equal(h.calls.backend,0);assert.equal(h.calls.rpc,0)
   await act(async()=>host.state.profile.set('alpha'))
-  assert.equal(document.querySelector('input[aria-label="Include optional Native correction setup in the request"]').checked,false)
-  assert.ok(!h.request().includes('correction_enabled = true'))
+  assert.equal(document.querySelector('input[aria-label="Include optional Native correction setup in the request"]').checked,true)
+  assert.ok(h.request().includes('correction_enabled = true'))
  }finally{await h.cleanup()}
 })
 

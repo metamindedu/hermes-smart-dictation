@@ -1,0 +1,430 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:smart-dictation:readiness:1",
+  "title": "Smart Dictation read-only readiness v1 (no correction execution capability)",
+  "method": "plugin.smart-dictation.readiness",
+  "invariants": {
+    "unknown_request_and_result_fields_rejected": true,
+    "request_profile_equals_owner_profile_equals_frozen_serving_profile": true,
+    "request_id_echo_only_if_shape_valid": true,
+    "request_id_is_not_identity_or_authority": true,
+    "instance_id_is_random_registration_generation_not_a_secret_or_auth_token": true,
+    "no_readiness_session_id_so_no_session_adoption_for_status": true,
+    "no_raw_text_or_private_context_in_phase1": true,
+    "no_ready_or_safe_aggregate_boolean": true,
+    "all_errors_are_fixed_codes_no_exception_messages": true,
+    "malformed_result_unknown_method_timeout_and_owner_drift_are_unverified_not_ready": true,
+    "task_handle_active_does_not_mean_current_registry_entry_identity": true,
+    "native_consent_is_not_contextual_consent": true,
+    "public_config_read_is_never_a_final_wire_veto": true,
+    "mandatory_limitations": [
+      "cache_not_checked",
+      "task_registry_unverified",
+      "recovery_not_resolved",
+      "final_request_not_enforceable",
+      "tool_metadata_unavailable"
+    ]
+  },
+  "$defs": {
+    "ReadinessRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "smart-dictation.readiness.v1"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}(?![\\s\\S])"
+        },
+        "profile": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}(?![\\s\\S])"
+        },
+        "owner_profile": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "schema_version",
+        "request_id",
+        "profile",
+        "owner_profile"
+      ]
+    },
+    "ReadinessResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "smart-dictation.readiness.v1"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}(?![\\s\\S])"
+        },
+        "ok": {
+          "const": true
+        },
+        "profile": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,63}(?![\\s\\S])"
+        },
+        "instance_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}(?![\\s\\S])"
+        },
+        "backend_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "capabilities": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "readiness-v1"
+            }
+          ],
+          "items": false,
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "read_state": {
+              "type": "string",
+              "enum": [
+                "observed",
+                "failed",
+                "unavailable"
+              ]
+            },
+            "source": {
+              "const": "effective-readonly"
+            },
+            "freshness": {
+              "const": "observation-not-atomic"
+            }
+          },
+          "required": [
+            "read_state",
+            "source",
+            "freshness"
+          ]
+        },
+        "local_stt": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "string",
+              "enum": [
+                "on",
+                "off",
+                "unverified"
+              ]
+            },
+            "selected_provider": {
+              "type": "string",
+              "enum": [
+                "local",
+                "smart_dictation",
+                "other",
+                "unverified"
+              ]
+            },
+            "configuration": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "inactive",
+                "invalid",
+                "unverified"
+              ]
+            },
+            "validation_scope": {
+              "const": "structural-only"
+            },
+            "library_presence": {
+              "type": "string",
+              "enum": [
+                "present",
+                "missing",
+                "unverified"
+              ]
+            },
+            "cache_files": {
+              "const": "not_checked"
+            },
+            "model_load_tested": {
+              "const": false
+            },
+            "transcription_tested": {
+              "const": false
+            }
+          },
+          "required": [
+            "enabled",
+            "selected_provider",
+            "configuration",
+            "validation_scope",
+            "library_presence",
+            "cache_files",
+            "model_load_tested",
+            "transcription_tested"
+          ]
+        },
+        "task": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "key": {
+              "const": "smart_dictation_correction"
+            },
+            "registration_observed": {
+              "type": "boolean"
+            },
+            "handle_state": {
+              "type": "string",
+              "enum": [
+                "active",
+                "inactive",
+                "unavailable"
+              ]
+            },
+            "current_registry_state": {
+              "const": "unverified"
+            }
+          },
+          "required": [
+            "key",
+            "registration_observed",
+            "handle_state",
+            "current_registry_state"
+          ]
+        },
+        "correction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "existing_execution": {
+              "const": "unchanged"
+            },
+            "native_requested": {
+              "type": "string",
+              "enum": [
+                "on",
+                "off",
+                "invalid",
+                "unverified"
+              ]
+            },
+            "native_consent": {
+              "type": "string",
+              "enum": [
+                "valid",
+                "missing",
+                "invalid",
+                "unverified"
+              ]
+            },
+            "native_policy": {
+              "type": "string",
+              "enum": [
+                "valid",
+                "invalid",
+                "unverified"
+              ]
+            },
+            "contextual_policy": {
+              "const": "client-managed-not-observed"
+            },
+            "configured_task_provider": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "main",
+                "explicit",
+                "invalid",
+                "unverified"
+              ]
+            },
+            "configured_task_model": {
+              "type": "string",
+              "enum": [
+                "unverified",
+                "present",
+                "absent"
+              ]
+            },
+            "configured_task_effort": {
+              "type": "string",
+              "enum": [
+                "unverified",
+                "present",
+                "absent"
+              ]
+            },
+            "task_body": {
+              "type": "string",
+              "enum": [
+                "unverified",
+                "empty",
+                "reasoning_only",
+                "unsupported_present",
+                "invalid"
+              ]
+            },
+            "destination_bodies": {
+              "type": "string",
+              "enum": [
+                "unverified",
+                "empty",
+                "reasoning_only",
+                "unsupported_present",
+                "invalid"
+              ]
+            },
+            "recovery_declarations": {
+              "type": "string",
+              "enum": [
+                "not_declared",
+                "declared",
+                "invalid",
+                "unverified"
+              ]
+            },
+            "resolved_destination": {
+              "const": "unverified"
+            },
+            "recovery_coverage": {
+              "const": "unverified"
+            },
+            "configuration_frozen_through_dispatch": {
+              "const": false
+            },
+            "final_request_enforcement": {
+              "const": "unavailable"
+            },
+            "original_tool_metadata": {
+              "const": "unavailable"
+            },
+            "strict_bridge": {
+              "const": "not_exposed"
+            },
+            "model_call_tested": {
+              "const": false
+            },
+            "payer_verified": {
+              "const": false
+            }
+          },
+          "required": [
+            "existing_execution",
+            "native_requested",
+            "native_consent",
+            "native_policy",
+            "contextual_policy",
+            "configured_task_provider",
+            "configured_task_model",
+            "configured_task_effort",
+            "task_body",
+            "destination_bodies",
+            "recovery_declarations",
+            "resolved_destination",
+            "recovery_coverage",
+            "configuration_frozen_through_dispatch",
+            "final_request_enforcement",
+            "original_tool_metadata",
+            "strict_bridge",
+            "model_call_tested",
+            "payer_verified"
+          ]
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "config_unverified",
+              "stt_inactive",
+              "stt_configuration_invalid",
+              "library_missing",
+              "cache_not_checked",
+              "task_registration_unobserved",
+              "task_handle_inactive",
+              "task_registry_unverified",
+              "native_policy_invalid",
+              "native_consent_missing",
+              "native_consent_invalid",
+              "advanced_task_config",
+              "advanced_destination_config",
+              "recovery_not_resolved",
+              "final_request_not_enforceable",
+              "tool_metadata_unavailable"
+            ]
+          },
+          "uniqueItems": true,
+          "minItems": 5,
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "schema_version",
+        "request_id",
+        "ok",
+        "profile",
+        "instance_id",
+        "backend_version",
+        "capabilities",
+        "config",
+        "local_stt",
+        "task",
+        "correction",
+        "limitations"
+      ]
+    },
+    "ReadinessError": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "smart-dictation.readiness.v1"
+        },
+        "request_id": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}(?![\\s\\S])"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ok": {
+          "const": false
+        },
+        "error": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "invalid_owner",
+            "owner_changed",
+            "backend_unavailable"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "request_id",
+        "ok",
+        "error"
+      ]
+    }
+  }
+}

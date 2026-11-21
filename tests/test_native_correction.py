@@ -19,7 +19,7 @@ def test_valid_transform_is_one_facade_call_with_no_overrides():
     assert json.loads(messages[1]['content']) == {'transcript':'한글 42 not /x'}
     assert kw == {'task':'smart_dictation_correction','purpose':'smart-dictation.native','temperature':0,'max_tokens':4096,'timeout':20}
 
-@pytest.mark.parametrize('response', ['', '{}', '{"transcript":""}', '{"transcript":"a", "extra":1}', '{"transcript":"a","transcript":"b"}', 'before {"transcript":"a"}', '{"transcript":', 'x'*65537])
+@pytest.mark.parametrize('response', ['', '{}', '{"transcript":""}', '{"transcript":"a", "extra":1}', '{"transcript":"a","transcript":"b"}', 'before {"transcript":"a"}', '{"transcript":', 'x'*65537], ids=['empty', 'missing-field', 'blank-transcript', 'extra-field', 'duplicate-key', 'trailing-input', 'malformed-json', 'oversized-output'])
 def test_bad_response_preserves_all_raw(response):
     raw='원문 /tmp 42 not'
     assert c.correct(raw, lambda *a, **k: SimpleNamespace(text=response)) == c.WARNING + raw

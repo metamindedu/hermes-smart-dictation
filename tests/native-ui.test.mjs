@@ -31,7 +31,7 @@ test('Native setup check is explicit, read-only and labels cache discovery as un
  try {
   assert.deepEqual(h.calls,[])
   await h.click();assert.deepEqual(h.calls,['inventory','/native-status'])
-  assert.ok(document.body.textContent.includes('Native correction is OFF'))
+  assert.ok(document.body.textContent.includes('Correction: OFF'))
   assert.ok(document.body.textContent.includes('Decoder execution and model-provider access were not tested'))
   assert.ok(!document.body.textContent.includes('Ready'))
  }finally{await h.cleanup()}
@@ -70,4 +70,27 @@ test('Native callback is inert after unmount',async()=>{
  const h=await mount({reply:()=>new Promise(r=>{resolve=r})})
  await h.click();await h.cleanup();resolve(response());await tick()
  assert.deepEqual(h.calls,['inventory','/native-status'])
+})
+
+test('equivalent owner object notifications retain displayed read-only state',async()=>{
+ const h=await mount()
+ try{
+  await h.click()
+  await act(async()=>{host.state.focusedSessionOwner.set({connectionId:'local',profile:'default'});await tick()})
+  assert.ok(document.querySelector('[role=status]'))
+  assert.ok(document.body.textContent.includes('Correction: OFF'))
+  assert.deepEqual(h.calls,['inventory','/native-status'])
+ }finally{await h.cleanup()}
+})
+test('equivalent owner notifications do not strand a pending current-owner reply',async()=>{
+ let resolve
+ const h=await mount({reply:()=>new Promise(r=>{resolve=r})})
+ try{
+  await h.click()
+  await act(async()=>{host.state.focusedSessionOwner.set({connectionId:'local',profile:'default'});await tick()})
+  await act(async()=>{resolve(response());await tick()})
+  assert.ok(document.querySelector('[role=status]'))
+  assert.equal(document.querySelector('button').disabled,false)
+  assert.deepEqual(h.calls,['inventory','/native-status'])
+ }finally{await h.cleanup()}
 })
